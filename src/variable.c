@@ -589,6 +589,10 @@ u32b option_mask[8];
  */
 u32b window_flag[8];
 u32b window_mask[8];
+u32b window_flag_active[8];
+byte window_flag_order[8][32];
+byte window_flag_order_count[8];
+byte window_flag_order_index[8];
 
 
 /*

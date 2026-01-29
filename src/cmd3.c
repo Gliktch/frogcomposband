@@ -1671,7 +1671,7 @@ void fix_monster_list(void)
         term *old = Term;
 
         if (!angband_term[j]) continue;
-        if (!(window_flag[j] & PW_MONSTER_LIST)) continue;
+        if (!(window_flag_active[j] & PW_MONSTER_LIST)) continue;
 
         Term_activate(angband_term[j]);
 
@@ -2287,7 +2287,7 @@ void fix_object_list(void)
         term *old = Term;
 
         if (!angband_term[j]) continue;
-        if (!(window_flag[j] & PW_OBJECT_LIST)) continue;
+        if (!(window_flag_active[j] & PW_OBJECT_LIST)) continue;
 
         Term_activate(angband_term[j]);
 

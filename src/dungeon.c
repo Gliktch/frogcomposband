@@ -3631,6 +3631,12 @@ static void _dispatch_command(int old_now_turn)
         /* Hack -- toggle windows */
         case KTRL('I'):
         {
+            if (window_flag_cycle_available())
+            {
+                window_flag_cycle();
+                break;
+            }
+
             toggle_inven_equip();
             toggle_mon_obj_lists();
             break;
@@ -5572,6 +5578,10 @@ void load_user_pref_files(void)
     sprintf(buf, "user-%s.prf", ANGBAND_SYS);
 
     /* Process that file */
+    process_pref_file(buf);
+
+    /* Access the "user" window pref file */
+    sprintf(buf, "user-win.prf");
     process_pref_file(buf);
 }
 

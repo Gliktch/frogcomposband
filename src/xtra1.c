@@ -16,6 +16,8 @@
 
 #include <assert.h>
 
+void window_stuff(void);
+
 /*** Screen Locations ***/
 
 /*
@@ -2477,6 +2479,234 @@ static void prt_frame_extra(void)
 }
 
 
+static int _window_flag_order_find(int term, int flag)
+{
+    int i;
+
+    for (i = 0; i < window_flag_order_count[term]; i++)
+    {
+        if (window_flag_order[term][i] == flag) return i;
+    }
+
+    return -1;
+}
+
+static void _window_flag_active_update(int term)
+{
+    if (window_flag_order_count[term] == 0)
+    {
+        window_flag_active[term] = 0;
+        window_flag_order_index[term] = 0;
+        return;
+    }
+
+    if (window_flag_order_index[term] >= window_flag_order_count[term])
+        window_flag_order_index[term] = 0;
+
+    window_flag_active[term] = (1L << window_flag_order[term][window_flag_order_index[term]]);
+}
+
+void window_flag_order_clear_term(int term)
+{
+    if (term <= 0 || term >= 8) return;
+
+    window_flag[term] = 0;
+    window_flag_order_count[term] = 0;
+    window_flag_order_index[term] = 0;
+    window_flag_active[term] = 0;
+}
+
+void window_flag_order_clear_flag(int flag)
+{
+    int term;
+
+    for (term = 1; term < 8; term++)
+        window_flag_order_remove(term, flag);
+}
+
+void window_flag_order_add(int term, int flag)
+{
+    if (term <= 0 || term >= 8) return;
+    if (flag < 0 || flag >= 32) return;
+    if (window_flag[term] & (1L << flag)) return;
+    if (window_flag_order_count[term] >= 32) return;
+
+    window_flag[term] |= (1L << flag);
+    window_flag_order[term][window_flag_order_count[term]++] = flag;
+    if (window_flag_order_count[term] == 1)
+        window_flag_order_index[term] = 0;
+
+    _window_flag_active_update(term);
+}
+
+void window_flag_order_remove(int term, int flag)
+{
+    int i;
+    int idx;
+
+    if (term <= 0 || term >= 8) return;
+    if (flag < 0 || flag >= 32) return;
+
+    idx = _window_flag_order_find(term, flag);
+    if (idx < 0) return;
+
+    window_flag[term] &= ~(1L << flag);
+    for (i = idx; i + 1 < window_flag_order_count[term]; i++)
+        window_flag_order[term][i] = window_flag_order[term][i + 1];
+    window_flag_order_count[term]--;
+
+    if (window_flag_order_index[term] > idx)
+        window_flag_order_index[term]--;
+    else if (window_flag_order_index[term] >= window_flag_order_count[term])
+        window_flag_order_index[term] = 0;
+
+    _window_flag_active_update(term);
+}
+
+bool window_flag_order_replace(int term, int old_flag, int new_flag)
+{
+    int old_idx;
+    int new_idx;
+    int i;
+
+    if (term <= 0 || term >= 8) return FALSE;
+    if (old_flag < 0 || old_flag >= 32) return FALSE;
+    if (new_flag < 0 || new_flag >= 32) return FALSE;
+    if (old_flag == new_flag) return TRUE;
+
+    old_idx = _window_flag_order_find(term, old_flag);
+    if (old_idx < 0) return FALSE;
+
+    new_idx = _window_flag_order_find(term, new_flag);
+    window_flag[term] &= ~(1L << old_flag);
+
+    if (new_idx >= 0)
+    {
+        for (i = old_idx; i + 1 < window_flag_order_count[term]; i++)
+            window_flag_order[term][i] = window_flag_order[term][i + 1];
+        window_flag_order_count[term]--;
+        if (new_idx > old_idx) new_idx--;
+
+        if (window_flag_order_index[term] == old_idx)
+            window_flag_order_index[term] = new_idx;
+        else if (window_flag_order_index[term] > old_idx)
+            window_flag_order_index[term]--;
+
+        _window_flag_active_update(term);
+        return TRUE;
+    }
+
+    window_flag[term] |= (1L << new_flag);
+    window_flag_order[term][old_idx] = new_flag;
+    _window_flag_active_update(term);
+    return TRUE;
+}
+
+void window_flag_order_set_active(int term, int index)
+{
+    if (term <= 0 || term >= 8) return;
+
+    if (window_flag_order_count[term] == 0)
+    {
+        window_flag_active[term] = 0;
+        window_flag_order_index[term] = 0;
+        return;
+    }
+
+    if (index < 0 || index >= window_flag_order_count[term])
+        index = 0;
+
+    window_flag_order_index[term] = index;
+    _window_flag_active_update(term);
+}
+
+void window_flag_order_sync_term(int term)
+{
+    byte new_order[32];
+    byte new_count = 0;
+    bool seen[32];
+    int i;
+
+    if (term <= 0 || term >= 8) return;
+
+    for (i = 0; i < 32; i++) seen[i] = FALSE;
+
+    for (i = 0; i < window_flag_order_count[term]; i++)
+    {
+        int flag = window_flag_order[term][i];
+
+        if (flag < 0 || flag >= 32) continue;
+        if (!(window_flag[term] & (1L << flag))) continue;
+        if (seen[flag]) continue;
+
+        new_order[new_count++] = flag;
+        seen[flag] = TRUE;
+    }
+
+    for (i = 0; i < 32; i++)
+    {
+        if (window_flag[term] & (1L << i))
+        {
+            if (!seen[i])
+                new_order[new_count++] = i;
+        }
+    }
+
+    for (i = 0; i < new_count; i++)
+        window_flag_order[term][i] = new_order[i];
+    window_flag_order_count[term] = new_count;
+
+    if (window_flag_order_index[term] >= window_flag_order_count[term])
+        window_flag_order_index[term] = 0;
+
+    _window_flag_active_update(term);
+}
+
+void window_flag_order_sync_all(void)
+{
+    int term;
+
+    for (term = 1; term < 8; term++)
+        window_flag_order_sync_term(term);
+}
+
+bool window_flag_cycle_available(void)
+{
+    int term;
+
+    for (term = 1; term < 8; term++)
+    {
+        if (!angband_term[term]) continue;
+        if (window_flag_order_count[term] >= 2) return TRUE;
+    }
+
+    return FALSE;
+}
+
+void window_flag_cycle(void)
+{
+    int term;
+    u32b mask = 0L;
+
+    for (term = 1; term < 8; term++)
+    {
+        if (!angband_term[term]) continue;
+        if (window_flag_order_count[term] < 2) continue;
+
+        window_flag_order_index[term] =
+            (window_flag_order_index[term] + 1) % window_flag_order_count[term];
+        _window_flag_active_update(term);
+        mask |= window_flag_active[term];
+    }
+
+    if (mask)
+    {
+        p_ptr->window |= mask;
+        window_stuff();
+        window_flag_dump();
+    }
+}
+
 /*
  * Hack -- display inventory in sub-windows
  */
@@ -2512,7 +2742,7 @@ static void fix_inven(void)
     {
         term *old = Term;
         if (!angband_term[j]) continue;
-        if (!(window_flag[j] & PW_INVEN)) continue;
+        if (!(window_flag_active[j] & PW_INVEN)) continue;
         Term_activate(angband_term[j]);
         _fix_inven_aux();
         Term_fresh();
@@ -2551,7 +2781,7 @@ static void fix_equip(void)
     {
         term *old = Term;
         if (!angband_term[j]) continue;
-        if (!(window_flag[j] & (PW_EQUIP))) continue;
+        if (!(window_flag_active[j] & (PW_EQUIP))) continue;
         Term_activate(angband_term[j]);
         _fix_equip_aux();
         Term_fresh();
@@ -2576,7 +2806,7 @@ static void fix_spell(void)
         if (!angband_term[j]) continue;
 
         /* No relevant flags */
-        if (!(window_flag[j] & (PW_SPELL))) continue;
+        if (!(window_flag_active[j] & (PW_SPELL))) continue;
 
         /* Activate */
         Term_activate(angband_term[j]);
@@ -2647,7 +2877,7 @@ static void fix_message(void)
         if (!angband_term[j]) continue;
 
         /* No relevant flags */
-        if (!(window_flag[j] & (PW_MESSAGE))) continue;
+        if (!(window_flag_active[j] & (PW_MESSAGE))) continue;
 
         /* Activate */
         Term_activate(angband_term[j]);
@@ -2679,7 +2909,7 @@ static void fix_overhead(void)
         if (!angband_term[j]) continue;
 
         /* No relevant flags */
-        if (!(window_flag[j] & (PW_OVERHEAD))) continue;
+        if (!(window_flag_active[j] & (PW_OVERHEAD))) continue;
 
         /* Activate */
         Term_activate(angband_term[j]);
@@ -2717,7 +2947,7 @@ static void fix_dungeon(void)
         if (!angband_term[j]) continue;
 
         /* No relevant flags */
-        if (!(window_flag[j] & (PW_DUNGEON))) continue;
+        if (!(window_flag_active[j] & (PW_DUNGEON))) continue;
 
         /* Activate */
         Term_activate(angband_term[j]);
@@ -2750,7 +2980,7 @@ static void fix_monster(void)
         if (!angband_term[j]) continue;
 
         /* No relevant flags */
-        if (!(window_flag[j] & (PW_MONSTER))) continue;
+        if (!(window_flag_active[j] & (PW_MONSTER))) continue;
 
         /* Activate */
         Term_activate(angband_term[j]);
@@ -2793,7 +3023,7 @@ static void fix_object(void)
         if (!angband_term[j]) continue;
 
         /* No relevant flags */
-        if (!(window_flag[j] & (PW_OBJECT))) continue;
+        if (!(window_flag_active[j] & (PW_OBJECT))) continue;
 
         /* Activate */
         Term_activate(angband_term[j]);
@@ -5811,7 +6041,7 @@ void window_stuff(void)
     for (j = 0; j < 8; j++)
     {
         /* Save usable flags */
-        if (angband_term[j]) mask |= window_flag[j];
+        if (angband_term[j]) mask |= window_flag_active[j];
     }
 
     /* Apply usable flags */

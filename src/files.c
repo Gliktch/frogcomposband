@@ -364,6 +364,9 @@ int parse_args(char *buf, char **name, char **args, int max)
  *   T:<template>:<modifier chr>:<modifier name1>:<modifier name2>:...
  *   T:<trigger>:<keycode>:<shift-keycode>
  *
+ * Specify window flag orders (term, active index, flags).
+ *   W:<term>:<active>:<flag1,flag2,...>
+ *
  */
 
 errr process_pref_file_command(char *buf)
@@ -625,6 +628,38 @@ errr process_pref_file_command(char *buf)
             return 0;
         }
         break;
+    }
+
+    /* Process "W:<term>:<active>:<flags>" -- window flag order */
+    case 'W':
+    {
+        int tok = tokenize(buf + 2, 4, zz, TOKENIZE_CHECKQUOTE);
+        int term;
+        int active;
+
+        if (tok < 3) return 1;
+
+        term = strtol(zz[0], NULL, 0);
+        active = strtol(zz[1], NULL, 0);
+        if (term <= 0 || term >= 8) return 1;
+
+        window_flag_order_clear_term(term);
+
+        if (zz[2] && *zz[2])
+        {
+            char *flags = zz[2];
+            char *t = strtok(flags, ",");
+
+            while (t)
+            {
+                int flag = strtol(t, NULL, 0);
+                window_flag_order_add(term, flag);
+                t = strtok(NULL, ",");
+            }
+        }
+
+        window_flag_order_set_active(term, active);
+        return 0;
     }
 
     /* Initialize macro trigger names and a template */
