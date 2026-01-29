@@ -21,7 +21,8 @@ AC_ARG_WITH(setgid,
 AC_ARG_WITH(private_dirs,
     [  --with-private-dirs     use private scorefiles/savefiles])
 AC_ARG_WITH(no_install,
-    [  --with-no-install       don't install, just run in-place])
+    [AS_HELP_STRING([--local], [run in-place (no install)])],
+    [with_no_install=yes])
 
 if test "x$with_setgid" = "xyes"; then
     AC_MSG_ERROR([Please specify a group to install as.])
@@ -49,7 +50,7 @@ if test "x$wsetgid$with_private_dirs$with_no_install" != "xyes";  then
     you do this, and should be used for most installations of the game. This
     is the default, if you specify none of these three options.
 
---with-no-install
+--local
     This leaves the game to run from the directory into which it was extracted
     and compiled, touching nothing else on the system - make install is not
     run.
@@ -60,8 +61,8 @@ fi
 if test "x$with_no_install" = "x"; then
     echo "Note: You have chosen to compile for installation, with data files
     in standard locations. For development, you may wish to consider using
-    --with-no-install which will leave the game to run from the directory
-    into which it was extracted and compiled.
+    --local which will leave the game to run from the directory into which it
+    was extracted and compiled.
 "
 fi
 
@@ -168,6 +169,26 @@ case "/$varpath" in
     */) MY_EXPAND_DIR(vardatadir, "$varpath")  ;;
     *)  MY_EXPAND_DIR(vardatadir, "$varpath/") ;;
 esac
+
+if test "x$with_no_install" = "x"; then
+    warn_paths=""
+    for check_path in "$bindir" "$vardatadir"; do
+        parent="${check_path%/*}"
+        if test -d "$check_path"; then
+            if test ! -w "$check_path"; then
+                warn_paths="$warn_paths $check_path"
+            fi
+        else
+            if test ! -w "$parent"; then
+                warn_paths="$warn_paths $check_path"
+            fi
+        fi
+    done
+    if test "x$warn_paths" != "x"; then
+        AC_MSG_WARN([Install paths not writable:${warn_paths}
+  You may need to run 'sudo make install', or use './configure --local' for a local build.])
+    fi
+fi
 
 
 AC_SUBST([configdir])

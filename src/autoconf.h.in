@@ -1,5 +1,8 @@
 /* src/autoconf.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to 1 if more than 16 colours are supported. */
+#undef ALLOW_XTRA_COLOURS
+
 /* Path to the game's configuration data */
 #undef DEFAULT_CONFIG_PATH
 
@@ -19,14 +22,8 @@
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
 
-/* Define to 1 if you have the `fdopen' function. */
-#undef HAVE_FDOPEN
-
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
-
-/* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
 
 /* Define to 1 if you have the `mkdir' function. */
 #undef HAVE_MKDIR
@@ -54,6 +51,9 @@
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
 
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
@@ -117,7 +117,9 @@
 /* Define to 1 if using SDL_mixer sound support and it's found. */
 #undef SOUND_SDL
 
-/* Define to 1 if you have the ANSI C header files. */
+/* Define to 1 if all of the C90 standard headers exist (not just the ones
+   required in a freestanding environment). This macro is provided for
+   backward compatibility; new code need not use it. */
 #undef STDC_HEADERS
 
 /* Define to 1 if using the Curses frontend. */
