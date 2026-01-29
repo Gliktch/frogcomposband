@@ -75,6 +75,7 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
     rect_t      display = ui_menu_rect();
     rect_t      list_display = display;
     int menu_line = (use_menu ? 1 : 0);
+    cptr        status_msg = NULL;
 
 #ifdef ALLOW_REPEAT /* TNB */
 
@@ -147,6 +148,9 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
         list_display.y += 1;
         list_display.cy -= 1;
     }
+
+    if (display.cy > 0)
+        Term_erase(display.x, display.y, display.cx);
 
     /* Get a spell from the user */
 
@@ -257,6 +261,12 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
         {
             bell();
             msg_format("You may not %s that %s.", prompt, p);
+            status_msg = format("You may not %s that %s.", prompt, p);
+            if (display.cy > 0)
+            {
+                Term_erase(display.x, display.y, display.cx);
+                c_put_str(TERM_L_RED, status_msg, display.y, display.x);
+            }
             continue;
         }
 
@@ -283,12 +293,24 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
             if (hp_caster && need_mana > p_ptr->chp)
             {
                 msg_print("You do not have enough hit points to use this spell.");
+                status_msg = "You do not have enough hit points to use this spell.";
+                if (display.cy > 0)
+                {
+                    Term_erase(display.x, display.y, display.cx);
+                    c_put_str(TERM_L_RED, status_msg, display.y, display.x);
+                }
                 if (flush_failure) flush();
                 continue;
             }
             if (!hp_caster && need_mana > p_ptr->csp)
             {
                 msg_format("You do not have enough mana to %s this %s.", prompt, p);
+                status_msg = format("You do not have enough mana to %s this %s.", prompt, p);
+                if (display.cy > 0)
+                {
+                    Term_erase(display.x, display.y, display.cx);
+                    c_put_str(TERM_L_RED, status_msg, display.y, display.x);
+                }
                 if (flush_failure) flush();
                 continue;
             }
