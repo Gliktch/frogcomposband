@@ -13,7 +13,8 @@
 
   Make sure you have the appropriate development packages installed.
   For example, you might run (Ubuntu or Mint):
-    $ sudo apt-get install autoconf gcc libc6-dev libncursesw6-dev libx11-dev
+    $ sudo apt-get install autoconf gcc libc6-dev libncurses-dev libx11-dev
+    (If that doesn't work on your distro, try libncursesw6-dev instead.)
 
   From the root of the source archive:
     $ sh autogen.sh
