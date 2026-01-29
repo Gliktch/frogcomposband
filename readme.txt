@@ -35,7 +35,7 @@
     $ frogcomposband -g -- -n<# of windows>    ## for 8x8 tile graphics 
 
   NOTE: some users have reported installation problems when compiling under
-  Linux (and Mac). Running ./configure using the --with-no-install parameter
+  Linux (and Mac). Running ./configure using the --local parameter
   will bypass this issue by building an executable to run in-place.
 
   You can change game windows' font, location, and size, by environment 
@@ -54,7 +54,7 @@
   (ALT: For development, doing an install is undesirable. Try the following instead:
     $ sudo apt-get install clang-3.5 llvm-3.5
     $ sh autogen.sh
-    $ ./configure SANITIZE_FLAGS=-fsanitize=address --with-no-install CC=clang-3.5
+    $ ./configure SANITIZE_FLAGS=-fsanitize=address --local CC=clang-3.5
     $ make clean
     $ make -j4
     $ cp src/frogcomposband .
