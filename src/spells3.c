@@ -3507,9 +3507,20 @@ void print_spells(int target_spell, byte *spells, int num, rect_t display, int u
     bool            max = FALSE;
     caster_info    *caster_ptr = get_caster_info();
     int             vaikeustaso;
+    int             max_cost = p_ptr->csp;
+    bool            hp_caster = (caster_ptr && (caster_ptr->options & CASTER_USE_HP));
 
     if (((use_realm <= REALM_NONE) || (use_realm > MAX_REALM)) && p_ptr->wizard)
         msg_print("Warning! print_spells called with null realm");
+
+    if (p_ptr->pclass == CLASS_NINJA_LAWYER && (use_realm != REALM_LAW))
+        hp_caster = TRUE;
+    if (caster_ptr && (caster_ptr->options & CASTER_USE_CONCENTRATION))
+        max_cost = p_ptr->concent;
+    else if (caster_ptr && (caster_ptr->options & CASTER_USE_AU))
+        max_cost = p_ptr->au;
+    else if (hp_caster)
+        max_cost = p_ptr->chp;
 
 
     /* Title the list */
@@ -3647,6 +3658,11 @@ void print_spells(int target_spell, byte *spells, int num, rect_t display, int u
 
             line_attr = TERM_L_GREEN;
         }
+
+        if (vaikeustaso > p_ptr->lev)
+            line_attr = TERM_L_DARK;
+        else if (need_mana > max_cost)
+            line_attr = TERM_L_DARK;
 
         /* Dump the spell --(-- */
         if (use_realm == REALM_HISSATSU)
