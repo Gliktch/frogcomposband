@@ -850,9 +850,7 @@ void toggle_inven_equip(void)
         /* Flip inven to equip */
         if (window_flag[j] & (PW_INVEN))
         {
-            /* Flip flags */
-            window_flag[j] &= ~(PW_INVEN);
-            window_flag[j] |= (PW_EQUIP);
+            window_flag_order_replace(j, WINDOW_FLAG_INVEN, WINDOW_FLAG_EQUIP);
 
             /* Window stuff */
             p_ptr->window |= (PW_EQUIP);
@@ -861,9 +859,7 @@ void toggle_inven_equip(void)
         /* Flip inven to equip */
         else if (window_flag[j] & (PW_EQUIP))
         {
-            /* Flip flags */
-            window_flag[j] &= ~(PW_EQUIP);
-            window_flag[j] |= (PW_INVEN);
+            window_flag_order_replace(j, WINDOW_FLAG_EQUIP, WINDOW_FLAG_INVEN);
 
             /* Window stuff */
             p_ptr->window |= (PW_INVEN);
@@ -880,16 +876,13 @@ void toggle_mon_obj_lists(void)
         if (!angband_term[i]) continue;
         if (window_flag[i] & PW_MONSTER_LIST)
         {
-            window_flag[i] &= ~PW_MONSTER_LIST;
-            window_flag[i] |= PW_OBJECT_LIST;
+            window_flag_order_replace(i, WINDOW_FLAG_MONSTER_LIST, WINDOW_FLAG_OBJECT_LIST);
             p_ptr->window |= PW_OBJECT_LIST;
         }
         else if (window_flag[i] & PW_OBJECT_LIST)
         {
-            window_flag[i] &= ~PW_OBJECT_LIST;
-            window_flag[i] |= PW_MONSTER_LIST;
+            window_flag_order_replace(i, WINDOW_FLAG_OBJECT_LIST, WINDOW_FLAG_MONSTER_LIST);
             p_ptr->window |= PW_MONSTER_LIST;
         }
     }
 }
-

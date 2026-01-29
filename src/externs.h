@@ -507,6 +507,10 @@ extern u32b option_flag[8];
 extern u32b option_mask[8];
 extern u32b window_flag[8];
 extern u32b window_mask[8];
+extern u32b window_flag_active[8];
+extern byte window_flag_order[8][32];
+extern byte window_flag_order_count[8];
+extern byte window_flag_order_index[8];
 extern term *angband_term[8];
 extern char angband_term_name[8][16];
 extern byte angband_color_table[256][4];
@@ -522,6 +526,18 @@ extern pack_info_t *pack_info_list;
 extern s16b max_pack_info_idx;
 extern s16b pack_info_free_list;
 extern s16b pack_info_count;
+
+extern void window_flag_order_clear_term(int term);
+extern void window_flag_order_clear_flag(int flag);
+extern void window_flag_order_add(int term, int flag);
+extern void window_flag_order_remove(int term, int flag);
+extern bool window_flag_order_replace(int term, int old_flag, int new_flag);
+extern void window_flag_order_set_active(int term, int index);
+extern void window_flag_order_sync_term(int term);
+extern void window_flag_order_sync_all(void);
+extern bool window_flag_cycle_available(void);
+extern void window_flag_cycle(void);
+extern void window_flag_dump(void);
 
 
 extern s16b alloc_kind_size;

@@ -318,6 +318,34 @@ static void close_auto_dump(void)
     return;
 }
 
+void window_flag_dump(void)
+{
+    char buf[1024];
+    int term;
+
+    path_build(buf, sizeof(buf), ANGBAND_DIR_USER, "user-win.prf");
+    if (!open_auto_dump(buf, "Window Flags")) return;
+
+    auto_dump_printf("# Window flag order and locks\n");
+
+    for (term = 1; term < 8; term++)
+    {
+        int i;
+
+        if (window_flag_order_count[term] == 0) continue;
+
+        auto_dump_printf("W:%d:%d:", term, window_flag_order_index[term]);
+        for (i = 0; i < window_flag_order_count[term]; i++)
+        {
+            if (i) auto_dump_printf(",");
+            auto_dump_printf("%d", window_flag_order[term][i]);
+        }
+        auto_dump_printf("\n");
+    }
+
+    close_auto_dump();
+}
+
 
 /*
  * Return suffix of ordinal number
@@ -1248,6 +1276,8 @@ static void do_cmd_options_win(void)
     char ch;
 
     bool go = TRUE;
+    bool order_changed[8];
+    bool pref_dirty = FALSE;
 
     u32b old_flag[8];
 
@@ -1257,6 +1287,7 @@ static void do_cmd_options_win(void)
     {
         /* Acquire current flags */
         old_flag[j] = window_flag[j];
+        order_changed[j] = FALSE;
     }
 
 
@@ -1282,6 +1313,7 @@ static void do_cmd_options_win(void)
 
             /* Window name, staggered, centered */
             Term_putstr(35 + j * 5 - strlen(s) / 2, 2 + j % 2, -1, a, s);
+
         }
 
         /* Display the options */
@@ -1337,17 +1369,16 @@ static void do_cmd_options_win(void)
             case 'T':
             case 't':
             {
-                /* Clear windows */
-                for (j = 0; j < 8; j++)
+                for (j = 1; j < 8; j++)
                 {
-                    window_flag[j] &= ~(1L << y);
+                    if (window_flag[j] & (1L << y))
+                        order_changed[j] = TRUE;
                 }
+                if (x > 0 && window_flag[x])
+                    order_changed[x] = TRUE;
 
-                /* Clear flags */
-                for (i = 0; i < 16; i++)
-                {
-                    window_flag[x] &= ~(1L << i);
-                }
+                window_flag_order_clear_flag(y);
+                window_flag_order_clear_term(x);
             }   /* Fall through */
             case 'y':
             case 'Y':
@@ -1356,7 +1387,9 @@ static void do_cmd_options_win(void)
                 if (x == 0) break;
 
                 /* Set flag */
-                window_flag[x] |= (1L << y);
+                if (!(window_flag[x] & (1L << y)))
+                    order_changed[x] = TRUE;
+                window_flag_order_add(x, y);
                 break;
             }
 
@@ -1364,7 +1397,9 @@ static void do_cmd_options_win(void)
             case 'N':
             {
                 /* Clear flag */
-                window_flag[x] &= ~(1L << y);
+                if (window_flag[x] & (1L << y))
+                    order_changed[x] = TRUE;
+                window_flag_order_remove(x, y);
                 break;
             }
 
@@ -1391,12 +1426,18 @@ static void do_cmd_options_win(void)
     for (j = 0; j < 8; j++)
     {
         term *old = Term;
+        bool changed = FALSE;
 
         /* Dead window */
         if (!angband_term[j]) continue;
 
         /* Ignore non-changes */
-        if (window_flag[j] == old_flag[j]) continue;
+        if (window_flag[j] != old_flag[j]) changed = TRUE;
+        if (order_changed[j]) changed = TRUE;
+        if (!changed) continue;
+
+        if (order_changed[j])
+            window_flag_order_set_active(j, 0);
 
         /* Activate */
         Term_activate(angband_term[j]);
@@ -1409,7 +1450,19 @@ static void do_cmd_options_win(void)
 
         /* Restore */
         Term_activate(old);
+
+        p_ptr->window |= window_flag_active[j];
     }
+
+    if (p_ptr->window) window_stuff();
+
+    for (j = 1; j < 8; j++)
+    {
+        if (window_flag[j] != old_flag[j]) pref_dirty = TRUE;
+        if (order_changed[j]) pref_dirty = TRUE;
+    }
+
+    if (pref_dirty) window_flag_dump();
 }
 
 

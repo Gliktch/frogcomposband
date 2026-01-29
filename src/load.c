@@ -380,6 +380,8 @@ static void rd_options(savefile_ptr file)
             }
         }
     }
+
+    window_flag_order_sync_all();
 }
 
 static void rd_quick_start(savefile_ptr file)

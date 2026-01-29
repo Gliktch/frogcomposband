@@ -2448,6 +2448,19 @@ enum {
 #define PW_BORG_1       0x00004000     /* Display borg messages */
 #define PW_BORG_2       0x00008000     /* Display borg status */
 
+#define WINDOW_FLAG_INVEN        0
+#define WINDOW_FLAG_EQUIP        1
+#define WINDOW_FLAG_SPELL        2
+#define WINDOW_FLAG_XXX          3
+#define WINDOW_FLAG_OBJECT_LIST  4
+#define WINDOW_FLAG_MONSTER_LIST 5
+#define WINDOW_FLAG_MESSAGE      6
+#define WINDOW_FLAG_OVERHEAD     7
+#define WINDOW_FLAG_MONSTER      8
+#define WINDOW_FLAG_OBJECT       9
+#define WINDOW_FLAG_DUNGEON      10
+#define WINDOW_FLAG_SNAPSHOT     11
+
 /*
  * Bit flags for the place_monster_???() (etc)
  */
