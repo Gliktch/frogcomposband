@@ -18,3 +18,19 @@ dist: manual
 	#cp doc/manual.html doc/manual.pdf $(TAG)/doc/
 	tar --exclude .gitignore --exclude *.dll -czvf $(OUT) $(TAG)
 	rm -rf $(TAG)
+
+install-extra:
+	${MKDIR_P} ${DESTDIR}${vardatadir}/apex \
+		${DESTDIR}${vardatadir}/data \
+		${DESTDIR}${vardatadir}/save \
+		${DESTDIR}${vardatadir}/user
+	if [ "x$(SETEGID)" != "x" ]; then \
+		chown -R root:$(SETEGID) ${DESTDIR}${vardatadir}/apex \
+			${DESTDIR}${vardatadir}/data \
+			${DESTDIR}${vardatadir}/save \
+			${DESTDIR}${vardatadir}/user; \
+		chmod -R g+w ${DESTDIR}${vardatadir}/apex \
+			${DESTDIR}${vardatadir}/data \
+			${DESTDIR}${vardatadir}/save \
+			${DESTDIR}${vardatadir}/user; \
+	fi
