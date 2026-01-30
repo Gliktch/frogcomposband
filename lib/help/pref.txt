@@ -16,6 +16,8 @@ Finally, once your character has been born or loaded, the game then tries to loa
   $PLAYER.prf</color>
 Here, $SYS is the 3-character system code for your platform, such as <color:keyword>win</color> for the Windows port or <color:keyword>gcu</color> for the Curses port. $RACE is your current character's race, $CLASS the class name, and $PLAYER the character's actual name, unless it contains illegal characters for your file system (e.g, naming your player <color:keypress>Mr. *WONDER*</color> is probably a bad idea). User preference files are loaded last so that you may override system preferences with your own settings. We'll discuss some examples below.
 
+FrogComposband also supports a unified profile file, <color:keyword>user-config.prf</color>, for saving and loading configuration sets (options pages, macros, keymaps, visuals, and birth profiles). This file is not automatically applied at startup (except for window flag layout), and is intended for deliberate save/load actions from the in-game menus.
+
 Preference files consist of a list of commands which are parsed to configure various options. These are discussed next.
 
 <topic:Commands><style:heading>Preference Commands</style>

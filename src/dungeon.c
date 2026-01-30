@@ -5580,9 +5580,76 @@ void load_user_pref_files(void)
     /* Process that file */
     process_pref_file(buf);
 
-    /* Access the "user" window pref file */
-    sprintf(buf, "user-win.prf");
-    process_pref_file(buf);
+    /* Load window flags from user-config.prf only */
+    {
+        char path[1024];
+        char line[1024];
+        FILE *fp;
+        bool in_block = FALSE;
+        bool found = FALSE;
+        const char *mark = "config:window-flags:0";
+        char header[96];
+        char footer[96];
+
+        path_build(path, sizeof(path), ANGBAND_DIR_USER, "user-config.prf");
+        fp = my_fopen(path, "r");
+        if (fp)
+        {
+            sprintf(header, "# vvvvvvv== %s ==vvvvvvv", mark);
+            sprintf(footer, "# ^^^^^^^== %s ==^^^^^^^", mark);
+
+            while (TRUE)
+            {
+                if (my_fgets(fp, line, sizeof(line))) break;
+
+                if (streq(line, header))
+                {
+                    in_block = TRUE;
+                    continue;
+                }
+                if (in_block && prefix(line, footer))
+                {
+                    found = TRUE;
+                    break;
+                }
+                if (!in_block) continue;
+                if (line[0] == '#' || line[0] == '\0') continue;
+
+                process_pref_file_command(line);
+            }
+            my_fclose(fp);
+        }
+
+        if (!found)
+        {
+            const char *legacy = "Window Flags";
+            path_build(path, sizeof(path), ANGBAND_DIR_USER, "user-config.prf");
+            fp = my_fopen(path, "r");
+            if (fp)
+            {
+                in_block = FALSE;
+                sprintf(header, "# vvvvvvv== %s ==vvvvvvv", legacy);
+                sprintf(footer, "# ^^^^^^^== %s ==^^^^^^^", legacy);
+
+                while (TRUE)
+                {
+                    if (my_fgets(fp, line, sizeof(line))) break;
+
+                    if (streq(line, header))
+                    {
+                        in_block = TRUE;
+                        continue;
+                    }
+                    if (in_block && prefix(line, footer)) break;
+                    if (!in_block) continue;
+                    if (line[0] == '#' || line[0] == '\0') continue;
+
+                    process_pref_file_command(line);
+                }
+                my_fclose(fp);
+            }
+        }
+    }
 }
 
 /*

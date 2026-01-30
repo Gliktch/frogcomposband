@@ -6,6 +6,8 @@ In the descriptions below, each option is listed as the textual summary which is
 
 Note that the internal name of the option can be used in user pref files to force the option to a given setting (see <link:pref.txt#Options> for more info).
 
+From any options page, you can press <color:keypress>l</color> to load settings, <color:keypress>s</color> to save settings, and <color:keypress>r</color> to reset settings to defaults. The main options menu also provides load/save/reset for all settings pages at once. These profiles are stored in <color:keyword>user-config.prf</color>.
+
 Various concepts are mentioned in the descriptions below, including <color:keyword>disturb</color> (cancel any running, resting, or repeated commands, which are in progress), <color:keyword>flush</color> (forget any keypresses waiting in the keypress queue, including any macros in progress), and <color:keyword>fresh</color> (dump any pending output to the screen).
 
 <topic:Birth><style:heading>Birth options</style>

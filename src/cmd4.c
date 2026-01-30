@@ -16,6 +16,7 @@
 #include "z-doc.h"
 
 #include <assert.h>
+#include <time.h>
 
 static void browser_cursor(char ch, int *column, int *grp_cur, int grp_cnt, int *list_cur, int list_cnt);
 
@@ -63,6 +64,22 @@ static char auto_dump_footer[] = "# ^^^^^^^== %s ==^^^^^^^";
 static FILE *auto_dump_stream;
 static cptr auto_dump_mark;
 static int auto_dump_line_num;
+
+#define CONFIG_PREF_FILE "user-config.prf"
+#define CONFIG_MAX_SLOTS 17
+#define CONFIG_DESC_LEN 80
+#define CONFIG_CURRENT_SLOT 0
+#define CONFIG_FIRST_USER_SLOT 1
+#define CONFIG_LAST_USER_SLOT 16
+#define CONFIG_FIRST_ALL_SLOT 11
+
+typedef struct config_slot_info_s config_slot_info_t;
+
+struct config_slot_info_s
+{
+    bool used;
+    char desc[CONFIG_DESC_LEN];
+};
 
 /*
  * Remove old lines automatically generated before.
@@ -318,32 +335,268 @@ static void close_auto_dump(void)
     return;
 }
 
-void window_flag_dump(void)
+static void config_build_path(char *buf, size_t buf_len)
 {
-    char buf[1024];
-    int term;
+    path_build(buf, buf_len, ANGBAND_DIR_USER, CONFIG_PREF_FILE);
+}
 
-    path_build(buf, sizeof(buf), ANGBAND_DIR_USER, "user-win.prf");
-    if (!open_auto_dump(buf, "Window Flags")) return;
+static void config_build_mark(char *buf, size_t buf_len, cptr section, int slot)
+{
+    if (slot == CONFIG_CURRENT_SLOT)
+        strnfmt(buf, buf_len, "config:%s:0", section);
+    else
+        strnfmt(buf, buf_len, "config:%s:%c", section, 'A' + (slot - CONFIG_FIRST_USER_SLOT));
+}
 
-    auto_dump_printf("# Window flag order and locks\n");
+static bool config_parse_header_line(cptr line, char *mark, size_t mark_len)
+{
+    const char *prefix = "# vvvvvvv== ";
+    const char *suffix = " ==vvvvvvv";
+    const char *start;
+    const char *end;
+    size_t len;
 
-    for (term = 1; term < 8; term++)
+    if (strncmp(line, prefix, strlen(prefix)) != 0) return FALSE;
+
+    start = line + strlen(prefix);
+    end = strstr(start, suffix);
+    if (!end) return FALSE;
+
+    len = (size_t)(end - start);
+    if (len >= mark_len) len = mark_len - 1;
+    strnfmt(mark, mark_len, "%.*s", (int)len, start);
+    return TRUE;
+}
+
+static bool config_parse_mark(cptr mark, char *section, size_t section_len, int *slot)
+{
+    const char *prefix = "config:";
+    const char *start;
+    const char *sep;
+
+    if (strncmp(mark, prefix, strlen(prefix)) != 0) return FALSE;
+    start = mark + strlen(prefix);
+    sep = strrchr(start, ':');
+    if (!sep || !sep[1]) return FALSE;
+
+    if (sep[1] == '0')
     {
-        int i;
-
-        if (window_flag_order_count[term] == 0) continue;
-
-        auto_dump_printf("W:%d:%d:", term, window_flag_order_index[term]);
-        for (i = 0; i < window_flag_order_count[term]; i++)
-        {
-            if (i) auto_dump_printf(",");
-            auto_dump_printf("%d", window_flag_order[term][i]);
-        }
-        auto_dump_printf("\n");
+        *slot = CONFIG_CURRENT_SLOT;
+        strnfmt(section, section_len, "%.*s", (int)(sep - start), start);
+        return TRUE;
     }
 
+    {
+        int slot_char = toupper((unsigned char)sep[1]);
+        int max_letter = 'A' + (CONFIG_LAST_USER_SLOT - CONFIG_FIRST_USER_SLOT);
+
+        if (slot_char < 'A' || slot_char > max_letter)
+            return FALSE;
+
+        *slot = (slot_char - 'A') + CONFIG_FIRST_USER_SLOT;
+    }
+    strnfmt(section, section_len, "%.*s", (int)(sep - start), start);
+    return TRUE;
+}
+
+static void config_timestamp(char *buf, size_t buf_len)
+{
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+
+    if (!tm_info)
+    {
+        strnfmt(buf, buf_len, "Unknown time");
+        return;
+    }
+
+    strftime(buf, buf_len, "%Y-%m-%d %H:%M", tm_info);
+}
+
+static void config_scan_slots(cptr section, config_slot_info_t slots[CONFIG_MAX_SLOTS])
+{
+    FILE *fp;
+    char path[1024];
+    char buf[1024];
+    char mark[128];
+    char mark_section[64];
+    int mark_slot = -1;
+    bool in_block = FALSE;
+    bool desc_found = FALSE;
+    char footer_mark_str[128];
+    size_t footer_len;
+
+    for (int i = 0; i < CONFIG_MAX_SLOTS; i++)
+    {
+        slots[i].used = FALSE;
+        slots[i].desc[0] = '\0';
+    }
+
+    config_build_path(path, sizeof(path));
+    fp = my_fopen(path, "r");
+    if (!fp) return;
+
+    while (TRUE)
+    {
+        if (my_fgets(fp, buf, sizeof(buf))) break;
+
+        if (config_parse_header_line(buf, mark, sizeof(mark)))
+        {
+            if (config_parse_mark(mark, mark_section, sizeof(mark_section), &mark_slot)
+                && streq(mark_section, section)
+                && mark_slot >= 0
+                && mark_slot < CONFIG_MAX_SLOTS)
+            {
+                slots[mark_slot].used = TRUE;
+                if (!slots[mark_slot].desc[0])
+                    strnfmt(slots[mark_slot].desc, sizeof(slots[mark_slot].desc), "Unnamed");
+
+                sprintf(footer_mark_str, auto_dump_footer, mark);
+                footer_len = strlen(footer_mark_str);
+                in_block = TRUE;
+                desc_found = FALSE;
+            }
+            else
+            {
+                in_block = FALSE;
+            }
+
+            continue;
+        }
+
+        if (!in_block) continue;
+
+        if (!desc_found && prefix(buf, "# desc: "))
+        {
+            const char *desc = buf + strlen("# desc: ");
+            if (*desc)
+            {
+                strnfmt(slots[mark_slot].desc, sizeof(slots[mark_slot].desc), "%s", desc);
+                desc_found = TRUE;
+            }
+            continue;
+        }
+
+        if (!strncmp(buf, footer_mark_str, footer_len))
+        {
+            in_block = FALSE;
+            mark_slot = -1;
+        }
+    }
+
+    my_fclose(fp);
+}
+
+static bool config_open_dump(cptr section, int slot, cptr desc)
+{
+    char path[1024];
+    char mark[128];
+    char timestamp[64];
+
+    config_build_path(path, sizeof(path));
+    config_build_mark(mark, sizeof(mark), section, slot);
+
+    if (!open_auto_dump(path, mark)) return FALSE;
+
+    config_timestamp(timestamp, sizeof(timestamp));
+    if (desc && *desc)
+        auto_dump_printf("# desc: %s | %s\n", desc, timestamp);
+    else
+        auto_dump_printf("# desc: %s | %s\n", player_name, timestamp);
+
+    return TRUE;
+}
+
+static bool config_open_dump_slot(cptr section, int slot, cptr desc, cptr name_root)
+{
+    if (!config_open_dump(section, slot, desc)) return FALSE;
+
+    if (slot == CONFIG_CURRENT_SLOT && name_root && *name_root)
+        auto_dump_printf("# meta: name_root=%s\n", name_root);
+
+    return TRUE;
+}
+
+static void config_remove_block(cptr section, int slot)
+{
+    char path[1024];
+    char mark[128];
+    cptr prev_mark = auto_dump_mark;
+
+    config_build_path(path, sizeof(path));
+    config_build_mark(mark, sizeof(mark), section, slot);
+
+    auto_dump_mark = mark;
+    remove_auto_dump(path);
+    auto_dump_mark = prev_mark;
+}
+
+static bool config_for_each_line(cptr section, int slot, int (*cb)(cptr line, void *data), void *data)
+{
+    FILE *fp;
+    char path[1024];
+    char buf[1024];
+    char mark[128];
+    char target_mark[128];
+    char footer_mark_str[128];
+    size_t footer_len;
+    bool in_block = FALSE;
+
+    config_build_path(path, sizeof(path));
+    fp = my_fopen(path, "r");
+    if (!fp) return FALSE;
+
+    config_build_mark(target_mark, sizeof(target_mark), section, slot);
+    sprintf(footer_mark_str, auto_dump_footer, target_mark);
+    footer_len = strlen(footer_mark_str);
+
+    while (TRUE)
+    {
+        if (my_fgets(fp, buf, sizeof(buf))) break;
+
+        if (config_parse_header_line(buf, mark, sizeof(mark)))
+        {
+            in_block = streq(mark, target_mark);
+            continue;
+        }
+
+        if (!in_block) continue;
+
+        if (!strncmp(buf, footer_mark_str, footer_len)) break;
+
+        if (buf[0] == '#' || buf[0] == '\0') continue;
+
+        if (cb && cb(buf, data) != 0)
+        {
+            my_fclose(fp);
+            return FALSE;
+        }
+    }
+
+    my_fclose(fp);
+    return TRUE;
+}
+
+static int config_copy_line(cptr line, void *data)
+{
+    (void)data;
+    auto_dump_printf("%s\n", line);
+    return 0;
+}
+
+static bool config_copy_block(cptr section, int src_slot, int dst_slot, cptr desc)
+{
+    if (!config_open_dump(section, dst_slot, desc)) return FALSE;
+    config_for_each_line(section, src_slot, config_copy_line, NULL);
     close_auto_dump();
+    return TRUE;
+}
+
+void window_flag_dump(void)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_window_flags_slot(CONFIG_CURRENT_SLOT, "Current Settings", name_root);
 }
 
 
@@ -694,18 +947,6 @@ static void do_cmd_options_cheat(cptr info)
 }
 #endif
 
-static option_type autosave_info[2] =
-{
-    { &autosave_l,      TRUE, 255, 0x01, 0x00,
-        "autosave_l",    "Autosave when entering new levels" },
-
-
-    { &autosave_t,      FALSE, 255, 0x02, 0x00,
-        "autosave_t",   "Timed autosave" },
-
-};
-
-
 static s16b toggle_frequency(s16b current)
 {
     switch (current)
@@ -723,125 +964,425 @@ static s16b toggle_frequency(s16b current)
     }
 }
 
-
-/*
- * Interact with some options for autosaving
- */
-static void do_cmd_options_autosave(cptr info)
+static s16b toggle_frequency_back(s16b current)
 {
-    char    ch;
+    static const s16b freq_list[] = {0, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
+    size_t i;
 
-    int     i, k = 0, n = 2;
-
-    char    buf[80];
-
-
-    /* Clear screen */
-    Term_clear();
-
-    /* Interact with the player */
-    while (TRUE)
+    for (i = 0; i < sizeof(freq_list) / sizeof(freq_list[0]); i++)
     {
-        /* Prompt XXX XXX XXX */
-        sprintf(buf, "%s (RET to advance, y/n to set, 'F' for frequency, ESC to accept) ", info);
-
-        prt(buf, 0, 0);
-
-        /* Display the options */
-        for (i = 0; i < n; i++)
+        if (freq_list[i] == current)
         {
-            byte a = TERM_WHITE;
-
-            /* Color current option */
-            if (i == k) a = TERM_L_BLUE;
-
-            /* Display the option text */
-            sprintf(buf, "%-48s: %s (%s)",
-                autosave_info[i].o_desc,
-                (*autosave_info[i].o_var ? "yes" : "no "),
-
-                autosave_info[i].o_text);
-            c_prt(a, buf, i + 2, 0);
+            if (i == 0) return freq_list[sizeof(freq_list) / sizeof(freq_list[0]) - 1];
+            return freq_list[i - 1];
         }
+    }
+    return 0;
+}
 
-        prt(format("Timed autosave frequency: every %d turns",  autosave_freq), 5, 0);
+#define OPTIONS_MAX 256
 
+typedef enum
+{
+    OPT_ENTRY_OPTION = 0,
+    OPT_ENTRY_SPECIAL = 1
+} opt_entry_type_t;
 
+typedef enum
+{
+    OPT_SPECIAL_DELAY_FACTOR = 0,
+    OPT_SPECIAL_HITPOINT_WARN,
+    OPT_SPECIAL_MANA_WARN,
+    OPT_SPECIAL_AUTOSAVE_L,
+    OPT_SPECIAL_AUTOSAVE_T,
+    OPT_SPECIAL_AUTOSAVE_FREQ
+} opt_special_type_t;
 
-        /* Hilite current option */
-        move_cursor(k + 2, 50);
+typedef struct opt_entry_s opt_entry_t;
+struct opt_entry_s
+{
+    opt_entry_type_t type;
+    int idx;
+};
 
-        /* Get a key */
-        ch = inkey();
+typedef struct options_snapshot_s options_snapshot_t;
+struct options_snapshot_s
+{
+    bool opts[OPTIONS_MAX];
+    int delay_factor;
+    int hitpoint_warn;
+    int mana_warn;
+    int autosave_l;
+    int autosave_t;
+    int autosave_freq;
+    int random_artifact_pct;
+    int reduce_uniques_pct;
+    int object_list_width;
+    int monster_list_width;
+    int generate_empty;
+    int small_level_type;
+    int pantheon_count;
+    int game_pantheon;
+};
 
-        /* Analyze */
-        switch (ch)
+static int options_count(void)
+{
+    int i;
+    for (i = 0; option_info[i].o_desc; i++) ;
+    return i;
+}
+
+static int option_index_by_var(bool *var)
+{
+    int i;
+    for (i = 0; option_info[i].o_desc; i++)
+    {
+        if (option_info[i].o_var == var) return i;
+    }
+    return -1;
+}
+
+static int option_index_by_text(cptr text)
+{
+    int i;
+    for (i = 0; option_info[i].o_desc; i++)
+    {
+        if (option_info[i].o_text && streq(option_info[i].o_text, text)) return i;
+    }
+    return -1;
+}
+
+#define DEFAULT_DELAY_FACTOR 2
+#define DEFAULT_HITPOINT_WARN 5
+#define DEFAULT_MANA_WARN 0
+#define DEFAULT_AUTOSAVE_L 1
+#define DEFAULT_AUTOSAVE_T 0
+#define DEFAULT_AUTOSAVE_FREQ 0
+#define DEFAULT_RANDOM_ARTIFACT_PCT 100
+#define DEFAULT_REDUCE_UNIQUES_PCT 100
+#define DEFAULT_OBJECT_LIST_WIDTH 50
+#define DEFAULT_MONSTER_LIST_WIDTH 50
+#define DEFAULT_GENERATE_EMPTY EMPTY_SOMETIMES
+#define DEFAULT_SMALL_LEVEL_TYPE 0
+#define DEFAULT_PANTHEON_COUNT 2
+#define DEFAULT_GAME_PANTHEON 0
+
+static void options_snapshot_current(options_snapshot_t *snap)
+{
+    int i;
+    int cnt = options_count();
+
+    for (i = 0; i < cnt; i++)
+        snap->opts[i] = option_info[i].o_var ? *option_info[i].o_var : FALSE;
+
+    snap->delay_factor = delay_factor;
+    snap->hitpoint_warn = hitpoint_warn;
+    snap->mana_warn = mana_warn;
+    snap->autosave_l = autosave_l;
+    snap->autosave_t = autosave_t;
+    snap->autosave_freq = autosave_freq;
+    snap->random_artifact_pct = random_artifact_pct;
+    snap->reduce_uniques_pct = reduce_uniques_pct;
+    snap->object_list_width = object_list_width;
+    snap->monster_list_width = monster_list_width;
+    snap->generate_empty = generate_empty;
+    snap->small_level_type = small_level_type;
+    snap->pantheon_count = pantheon_count;
+    snap->game_pantheon = game_pantheon;
+}
+
+static void options_snapshot_defaults(options_snapshot_t *snap)
+{
+    int i;
+    int cnt = options_count();
+
+    for (i = 0; i < cnt; i++)
+        snap->opts[i] = option_info[i].o_norm ? TRUE : FALSE;
+
+    snap->delay_factor = DEFAULT_DELAY_FACTOR;
+    snap->hitpoint_warn = DEFAULT_HITPOINT_WARN;
+    snap->mana_warn = DEFAULT_MANA_WARN;
+    snap->autosave_l = DEFAULT_AUTOSAVE_L;
+    snap->autosave_t = DEFAULT_AUTOSAVE_T;
+    snap->autosave_freq = DEFAULT_AUTOSAVE_FREQ;
+    snap->random_artifact_pct = DEFAULT_RANDOM_ARTIFACT_PCT;
+    snap->reduce_uniques_pct = DEFAULT_REDUCE_UNIQUES_PCT;
+    snap->object_list_width = DEFAULT_OBJECT_LIST_WIDTH;
+    snap->monster_list_width = DEFAULT_MONSTER_LIST_WIDTH;
+    snap->generate_empty = DEFAULT_GENERATE_EMPTY;
+    snap->small_level_type = DEFAULT_SMALL_LEVEL_TYPE;
+    snap->pantheon_count = DEFAULT_PANTHEON_COUNT;
+    snap->game_pantheon = DEFAULT_GAME_PANTHEON;
+}
+
+static void options_snapshot_apply(const options_snapshot_t *snap)
+{
+    int i;
+    int cnt = options_count();
+
+    for (i = 0; i < cnt; i++)
+    {
+        if (option_info[i].o_var)
+            *option_info[i].o_var = snap->opts[i];
+    }
+
+    delay_factor = snap->delay_factor;
+    hitpoint_warn = snap->hitpoint_warn;
+    mana_warn = snap->mana_warn;
+    autosave_l = snap->autosave_l;
+    autosave_t = snap->autosave_t;
+    autosave_freq = snap->autosave_freq;
+    random_artifact_pct = snap->random_artifact_pct;
+    reduce_uniques_pct = snap->reduce_uniques_pct;
+    object_list_width = snap->object_list_width;
+    monster_list_width = snap->monster_list_width;
+    generate_empty = snap->generate_empty;
+    small_level_type = snap->small_level_type;
+    pantheon_count = snap->pantheon_count;
+    game_pantheon = snap->game_pantheon;
+
+    always_small_levels = (small_level_type != 0);
+    single_pantheon = (pantheon_count == 1);
+    guaranteed_pantheon = (game_pantheon > 0);
+}
+
+static void options_snapshot_apply_numeric(options_snapshot_t *snap, cptr name, int val)
+{
+    int idx;
+
+    if (streq(name, "delay_factor"))
+    {
+        snap->delay_factor = MAX(0, MIN(9, val));
+        return;
+    }
+    if (streq(name, "hitpoint_warn"))
+    {
+        snap->hitpoint_warn = MAX(0, MIN(9, val));
+        return;
+    }
+    if (streq(name, "mana_warn"))
+    {
+        snap->mana_warn = MAX(0, MIN(9, val));
+        return;
+    }
+    if (streq(name, "autosave_l"))
+    {
+        snap->autosave_l = (val != 0);
+        return;
+    }
+    if (streq(name, "autosave_t"))
+    {
+        snap->autosave_t = (val != 0);
+        return;
+    }
+    if (streq(name, "autosave_freq"))
+    {
+        snap->autosave_freq = MAX(0, val);
+        return;
+    }
+    if (streq(name, "random_artifact_pct"))
+    {
+        snap->random_artifact_pct = MAX(0, MIN(100, val));
+        idx = option_index_by_var(&random_artifacts);
+        if (idx >= 0) snap->opts[idx] = (snap->random_artifact_pct > 0);
+        return;
+    }
+    if (streq(name, "reduce_uniques_pct"))
+    {
+        snap->reduce_uniques_pct = MAX(0, MIN(100, val));
+        idx = option_index_by_var(&reduce_uniques);
+        if (idx >= 0) snap->opts[idx] = (snap->reduce_uniques_pct > 0);
+        return;
+    }
+    if (streq(name, "object_list_width"))
+    {
+        snap->object_list_width = MAX(24, val);
+        return;
+    }
+    if (streq(name, "monster_list_width"))
+    {
+        snap->monster_list_width = MAX(24, val);
+        return;
+    }
+    if (streq(name, "generate_empty"))
+    {
+        snap->generate_empty = MAX(0, MIN(EMPTY_MAX - 1, val));
+        idx = option_index_by_var(&ironman_empty_levels);
+        if (idx >= 0) snap->opts[idx] = (snap->generate_empty == EMPTY_ALWAYS);
+        return;
+    }
+    if (streq(name, "small_level_type"))
+    {
+        snap->small_level_type = MAX(0, MIN(SMALL_LVL_MAX, val));
+        idx = option_index_by_var(&always_small_levels);
+        if (idx >= 0) snap->opts[idx] = (snap->small_level_type != 0);
+        return;
+    }
+    if (streq(name, "pantheon_count"))
+    {
+        snap->pantheon_count = MAX(1, MIN(PANTHEON_MAX - 1, val));
+        idx = option_index_by_var(&single_pantheon);
+        if (idx >= 0) snap->opts[idx] = (snap->pantheon_count == 1);
+        return;
+    }
+    if (streq(name, "game_pantheon"))
+    {
+        snap->game_pantheon = MAX(0, MIN(PANTHEON_MAX - 1, val));
+        idx = option_index_by_var(&guaranteed_pantheon);
+        if (idx >= 0) snap->opts[idx] = (snap->game_pantheon > 0);
+        return;
+    }
+}
+
+static void options_snapshot_apply_line(options_snapshot_t *snap, cptr line)
+{
+    char *zz[3];
+    char buf[1024];
+
+    strnfmt(buf, sizeof(buf), "%s", line);
+
+    if (buf[1] != ':') return;
+
+    if ((buf[0] == 'X' || buf[0] == 'Y') &&
+        tokenize(buf + 2, 1, zz, TOKENIZE_CHECKQUOTE) == 1)
+    {
+        int idx = option_index_by_text(zz[0]);
+        if (idx >= 0)
+            snap->opts[idx] = (buf[0] == 'Y');
+        return;
+    }
+
+    if (buf[0] == 'O' &&
+        tokenize(buf + 2, 2, zz, TOKENIZE_CHECKQUOTE) == 2)
+    {
+        options_snapshot_apply_numeric(snap, zz[0], (int)strtol(zz[1], NULL, 0));
+        return;
+    }
+}
+
+static void options_build_entries(int page, opt_entry_t *entries, int *entry_count)
+{
+    int i;
+    int n = 0;
+
+    for (i = 0; option_info[i].o_desc; i++)
+    {
+        if (option_info[i].o_page == page)
         {
-            case ESCAPE:
-            {
-                return;
-            }
+            entries[n].type = OPT_ENTRY_OPTION;
+            entries[n].idx = i;
+            n++;
+        }
+    }
 
-            case '-':
-            case '8':
-            {
-                k = (n + k - 1) % n;
-                break;
-            }
+    switch (page)
+    {
+        case OPT_PAGE_MAPSCREEN:
+            entries[n].type = OPT_ENTRY_SPECIAL;
+            entries[n].idx = OPT_SPECIAL_DELAY_FACTOR;
+            n++;
+            break;
+        case OPT_PAGE_TEXT:
+            entries[n].type = OPT_ENTRY_SPECIAL;
+            entries[n].idx = OPT_SPECIAL_MANA_WARN;
+            n++;
+            break;
+        case OPT_PAGE_GAMEPLAY:
+            entries[n].type = OPT_ENTRY_SPECIAL;
+            entries[n].idx = OPT_SPECIAL_AUTOSAVE_L;
+            n++;
+            entries[n].type = OPT_ENTRY_SPECIAL;
+            entries[n].idx = OPT_SPECIAL_AUTOSAVE_T;
+            n++;
+            entries[n].type = OPT_ENTRY_SPECIAL;
+            entries[n].idx = OPT_SPECIAL_AUTOSAVE_FREQ;
+            n++;
+            break;
+        case OPT_PAGE_DISTURBANCE:
+            entries[n].type = OPT_ENTRY_SPECIAL;
+            entries[n].idx = OPT_SPECIAL_HITPOINT_WARN;
+            n++;
+            break;
+        default:
+            break;
+    }
 
-            case ' ':
-            case '\n':
-            case '\r':
-            case '2':
-            {
-                k = (k + 1) % n;
-                break;
-            }
+    *entry_count = n;
+}
 
-            case 'y':
-            case 'Y':
-            case '6':
-            {
-
-                (*autosave_info[k].o_var) = TRUE;
-                k = (k + 1) % n;
-                break;
-            }
-
-            case 'n':
-            case 'N':
-            case '4':
-            {
-                (*autosave_info[k].o_var) = FALSE;
-                k = (k + 1) % n;
-                break;
-            }
-
-            case 'f':
-            case 'F':
-            {
-                autosave_freq = toggle_frequency(autosave_freq);
-                prt(format("Timed autosave frequency: every %d turns",
-                       autosave_freq), 5, 0);
-                break;
-            }
-
-            case '?':
-            {
-                doc_display_help("option.txt", "Autosave");
-
-                Term_clear();
-                break;
-            }
-
-            default:
-            {
-                bell();
-                break;
-            }
+static void options_format_special_value(opt_special_type_t type, const options_snapshot_t *snap, char *buf, size_t buf_len)
+{
+    switch (type)
+    {
+        case OPT_SPECIAL_DELAY_FACTOR:
+        {
+            int msec = snap ? (square_delays ? snap->delay_factor * snap->delay_factor * 2
+                                            : snap->delay_factor * snap->delay_factor * snap->delay_factor)
+                            : delay_time();
+            int val = snap ? snap->delay_factor : delay_factor;
+            strnfmt(buf, buf_len, "%d (%d ms)", val, msec);
+            break;
+        }
+        case OPT_SPECIAL_HITPOINT_WARN:
+            strnfmt(buf, buf_len, "%d0%%", snap ? snap->hitpoint_warn : hitpoint_warn);
+            break;
+        case OPT_SPECIAL_MANA_WARN:
+            strnfmt(buf, buf_len, "%d0%%", snap ? snap->mana_warn : mana_warn);
+            break;
+        case OPT_SPECIAL_AUTOSAVE_L:
+            strnfmt(buf, buf_len, "%s", (snap ? snap->autosave_l : autosave_l) ? "yes" : "no");
+            break;
+        case OPT_SPECIAL_AUTOSAVE_T:
+            strnfmt(buf, buf_len, "%s", (snap ? snap->autosave_t : autosave_t) ? "yes" : "no");
+            break;
+        case OPT_SPECIAL_AUTOSAVE_FREQ:
+        {
+            int val = snap ? snap->autosave_freq : autosave_freq;
+            if (val <= 0) strnfmt(buf, buf_len, "off");
+            else strnfmt(buf, buf_len, "every %d turns", val);
+            break;
         }
     }
 }
+
+static cptr options_special_desc(opt_special_type_t type)
+{
+    switch (type)
+    {
+        case OPT_SPECIAL_DELAY_FACTOR: return "Base Delay Factor";
+        case OPT_SPECIAL_HITPOINT_WARN: return "Hitpoint Warning";
+        case OPT_SPECIAL_MANA_WARN: return "Mana Color Threshold";
+        case OPT_SPECIAL_AUTOSAVE_L: return "Autosave when entering new levels";
+        case OPT_SPECIAL_AUTOSAVE_T: return "Timed autosave";
+        case OPT_SPECIAL_AUTOSAVE_FREQ: return "Timed autosave frequency";
+    }
+    return "";
+}
+
+static cptr options_special_help(opt_special_type_t type)
+{
+    switch (type)
+    {
+        case OPT_SPECIAL_DELAY_FACTOR: return "BaseDelay";
+        case OPT_SPECIAL_HITPOINT_WARN: return "Hitpoint";
+        case OPT_SPECIAL_MANA_WARN: return "Hitpoint";
+        case OPT_SPECIAL_AUTOSAVE_L: return "Autosave";
+        case OPT_SPECIAL_AUTOSAVE_T: return "Autosave";
+        case OPT_SPECIAL_AUTOSAVE_FREQ: return "Autosave";
+    }
+    return NULL;
+}
+
+static void config_options_load_page(int page);
+static void config_options_save_page(int page);
+static void config_options_reset_page(int page);
+static void config_options_load_all(void);
+static void config_options_save_all(void);
+static void config_options_reset_all(void);
+static void config_options_load_all_slot(int slot);
+void config_birth_save(void);
+void config_birth_load(bool allow_load);
+
 
 
 /*
@@ -851,25 +1392,17 @@ void do_cmd_options_aux(int page, cptr info)
 {
     int     ch;
     int     i, k = 0, n = 0, l;
-    int     opt[40];
-    char    buf[80];
+    opt_entry_t entries[OPTIONS_MAX + 8];
+    char    buf[160];
     bool    browse_only = (page == OPT_PAGE_BIRTH) && character_generated &&
                           (!p_ptr->wizard || !allow_debug_opts);
     bool    scroll_mode;
     byte    option_offset = 0;
     byte    bottom_opt = Term->hgt - ((page == OPT_PAGE_AUTODESTROY) ? 5 : 2);
+    options_snapshot_t options_before;
 
-/*    browse_only = FALSE; */
-
-    /* Lookup the options */
-    for (i = 0; i < 40; i++) opt[i] = 0;
-
-    /* Scan the options */
-    for (i = 0; option_info[i].o_desc; i++)
-    {
-        /* Notice options on this "page" */
-        if (option_info[i].o_page == page) opt[n++] = i;
-    }
+    options_build_entries(page, entries, &n);
+    options_snapshot_current(&options_before);
 
     scroll_mode = (n > bottom_opt);
 
@@ -882,10 +1415,10 @@ void do_cmd_options_aux(int page, cptr info)
         int dir;
 
         /* Prompt XXX XXX XXX */
-        sprintf(buf, "%s (RET:next, %s, ?:help) ", info, browse_only ? "ESC:exit" : "y/n:change, ESC:accept");
+        sprintf(buf, "%s (RET:next, %s, l:load, s:save, r:reset, ?:help) ",
+            info, browse_only ? "ESC:exit" : "y/n:change, ESC:accept");
 
         prt(buf, 0, 0);
-
 
         /* HACK -- description for easy-auto-destroy options */
         if (page == OPT_PAGE_AUTODESTROY) c_prt(TERM_YELLOW, "Following options will protect items from easy auto-destroyer.", 11, 3);
@@ -895,54 +1428,60 @@ void do_cmd_options_aux(int page, cptr info)
         {
             int rivi;
             byte a = TERM_WHITE;
+            opt_entry_t *entry = &entries[i];
 
             /* Color current option */
             if (i == k) a = TERM_L_BLUE;
 
-            /* Display the option text */
-            if (option_info[opt[i]].o_var == &random_artifacts)
+            if (entry->type == OPT_ENTRY_SPECIAL)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                char valbuf[80];
+                options_format_special_value(entry->idx, NULL, valbuf, sizeof(valbuf));
+                sprintf(buf, "%-48s: %s", options_special_desc(entry->idx), valbuf);
+            }
+            else if (option_info[entry->idx].o_var == &random_artifacts)
+            {
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 if (random_artifacts)
                     sprintf(buf + strlen(buf), "%d%% ", random_artifact_pct);
                 else
                     strcat(buf, "no  ");
-                sprintf(buf + strlen(buf), "(%.19s)", option_info[opt[i]].o_text);
+                sprintf(buf + strlen(buf), "(%.19s)", option_info[entry->idx].o_text);
             }
-            else if (option_info[opt[i]].o_var == &ironman_empty_levels)
+            else if (option_info[entry->idx].o_var == &ironman_empty_levels)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 sprintf(buf + strlen(buf), "%s", empty_lv_description[generate_empty]);
             }
-            else if (option_info[opt[i]].o_var == &reduce_uniques)
+            else if (option_info[entry->idx].o_var == &reduce_uniques)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 if (reduce_uniques)
                     sprintf(buf + strlen(buf), "%d%% ", reduce_uniques_pct);
                 else
                     strcat(buf, "no  ");
-                sprintf(buf + strlen(buf), "(%.19s)", option_info[opt[i]].o_text);
+                sprintf(buf + strlen(buf), "(%.19s)", option_info[entry->idx].o_text);
             }
-            else if (option_info[opt[i]].o_var == &obj_list_width)
+            else if (option_info[entry->idx].o_var == &obj_list_width)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 sprintf(buf + strlen(buf), "%-3d ", object_list_width);
-                sprintf(buf + strlen(buf), "(%.19s)", option_info[opt[i]].o_text);
+                sprintf(buf + strlen(buf), "(%.19s)", option_info[entry->idx].o_text);
             }
-            else if (option_info[opt[i]].o_var == &mon_list_width)
+            else if (option_info[entry->idx].o_var == &mon_list_width)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 sprintf(buf + strlen(buf), "%-3d ", monster_list_width);
-                sprintf(buf + strlen(buf), "(%.19s)", option_info[opt[i]].o_text);
+                sprintf(buf + strlen(buf), "(%.19s)", option_info[entry->idx].o_text);
             }
-            else if (option_info[opt[i]].o_var == &single_pantheon)
+            else if (option_info[entry->idx].o_var == &single_pantheon)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 sprintf(buf + strlen(buf), "%d of %d", pantheon_count, PANTHEON_MAX - 1);
             }
-            else if (option_info[opt[i]].o_var == &guaranteed_pantheon)
+            else if (option_info[entry->idx].o_var == &guaranteed_pantheon)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 if (pantheon_count == PANTHEON_MAX - 1)
                 {
                     strcat(buf, "All ");
@@ -954,17 +1493,17 @@ void do_cmd_options_aux(int page, cptr info)
                 else
                     strcat(buf, "None");
             }
-            else if (option_info[opt[i]].o_var == &always_small_levels)
+            else if (option_info[entry->idx].o_var == &always_small_levels)
             {
-                sprintf(buf, "%-48s: ", option_info[opt[i]].o_desc);
+                sprintf(buf, "%-48s: ", option_info[entry->idx].o_desc);
                 sprintf(buf + strlen(buf), "%s ", lv_size_options[small_level_type]);
             }
             else
             {
                 sprintf(buf, "%-48s: %s (%.19s)",
-                    option_info[opt[i]].o_desc,
-                    (*option_info[opt[i]].o_var ? "yes" : "no "),
-                    option_info[opt[i]].o_text);
+                    option_info[entry->idx].o_desc,
+                    (*option_info[entry->idx].o_var ? "yes" : "no "),
+                    option_info[entry->idx].o_text);
             }
             if ((page == OPT_PAGE_AUTODESTROY) && i > 7) rivi = i + 5 - option_offset;
             else rivi = i + 2 - option_offset;
@@ -1000,7 +1539,67 @@ void do_cmd_options_aux(int page, cptr info)
         {
             case ESCAPE:
             {
+                if (!browse_only)
+                {
+                    options_snapshot_t cur_opts;
+                    char diff_lines[512][160];
+                    int diff_count = 0;
+
+                    options_snapshot_current(&cur_opts);
+                    options_diff_page(page, &options_before, &cur_opts, diff_lines, &diff_count, 512);
+                    if (diff_count > 0)
+                    {
+                        while (1)
+                        {
+                            int resp;
+                            prt("Save option changes to Current Settings? (y/n/r)", 0, 0);
+                            resp = inkey();
+                            if (resp == 'y' || resp == 'Y')
+                            {
+                                config_save_current_options_page(page);
+                                msg_print("Saved to Current Settings.");
+                                break;
+                            }
+                            if (resp == 'r' || resp == 'R')
+                            {
+                                options_snapshot_apply(&options_before);
+                                msg_print("Reverted option changes.");
+                                break;
+                            }
+                            if (resp == 'n' || resp == 'N' || resp == ESCAPE)
+                                break;
+                            bell();
+                        }
+                    }
+                }
                 return;
+            }
+
+            case 'l':
+            case 'L':
+            {
+                if (browse_only) bell();
+                else config_options_load_page(page);
+                Term_clear();
+                break;
+            }
+
+            case 's':
+            case 'S':
+            {
+                if (browse_only) bell();
+                else config_options_save_page(page);
+                Term_clear();
+                break;
+            }
+
+            case 'r':
+            case 'R':
+            {
+                if (browse_only) bell();
+                else config_options_reset_page(page);
+                Term_clear();
+                break;
             }
 
             case '-':
@@ -1010,7 +1609,7 @@ void do_cmd_options_aux(int page, cptr info)
                 k = (n + k - 1) % n;
                 if (scroll_mode)
                 {
-                    if (k > bottom_opt - 1 + option_offset) option_offset = k - bottom_opt + 1; /* ((k == n - 1) ? 1 : 2); */
+                    if (k > bottom_opt - 1 + option_offset) option_offset = k - bottom_opt + 1;
                     else if ((k < option_offset) || ((k > 0) && (k == option_offset))) option_offset = MAX(0, k - 3);
                 }
                 break;
@@ -1039,7 +1638,7 @@ void do_cmd_options_aux(int page, cptr info)
                 k = MAX(0, k - 10);
                 if (scroll_mode)
                 {
-                    if (k > bottom_opt - 1 + option_offset) option_offset = k - bottom_opt + 1; /* ((k == n - 1) ? 1 : 2); */
+                    if (k > bottom_opt - 1 + option_offset) option_offset = k - bottom_opt + 1;
                     else if ((k < option_offset) || ((k > 0) && (k == option_offset))) option_offset = MAX(0, k - 3);
                 }
                 break;
@@ -1064,8 +1663,37 @@ void do_cmd_options_aux(int page, cptr info)
             case '6':
             case SKEY_RIGHT:
             {
+                opt_entry_t *entry = &entries[k];
+
                 if (browse_only) break;
-                if (option_info[opt[k]].o_var == &random_artifacts)
+
+                if (entry->type == OPT_ENTRY_SPECIAL)
+                {
+                    switch (entry->idx)
+                    {
+                        case OPT_SPECIAL_DELAY_FACTOR:
+                            if (delay_factor < 9) delay_factor++;
+                            break;
+                        case OPT_SPECIAL_HITPOINT_WARN:
+                            if (hitpoint_warn < 9) hitpoint_warn++;
+                            break;
+                        case OPT_SPECIAL_MANA_WARN:
+                            if (mana_warn < 9) mana_warn++;
+                            break;
+                        case OPT_SPECIAL_AUTOSAVE_L:
+                            autosave_l = TRUE;
+                            break;
+                        case OPT_SPECIAL_AUTOSAVE_T:
+                            autosave_t = TRUE;
+                            break;
+                        case OPT_SPECIAL_AUTOSAVE_FREQ:
+                            autosave_freq = toggle_frequency_back(autosave_freq);
+                            break;
+                    }
+                    break;
+                }
+
+                if (option_info[entry->idx].o_var == &random_artifacts)
                 {
                     if (!random_artifacts)
                     {
@@ -1078,21 +1706,21 @@ void do_cmd_options_aux(int page, cptr info)
                         if (random_artifact_pct > 100) random_artifacts = FALSE;
                     }
                 }
-                else if (option_info[opt[k]].o_var == &obj_list_width)
+                else if (option_info[entry->idx].o_var == &obj_list_width)
                 {
                     int maksi = MAX(50, Term->wid - 15);
                     maksi &= ~(0x01);
                     object_list_width += 2;
                     if (object_list_width > maksi) object_list_width = maksi;
                 }
-                else if (option_info[opt[k]].o_var == &mon_list_width)
+                else if (option_info[entry->idx].o_var == &mon_list_width)
                 {
                     int maksi = MAX(50, Term->wid - 15);
                     maksi &= ~(0x01);
                     monster_list_width += 2;
                     if (monster_list_width > maksi) monster_list_width = maksi;
                 }
-                else if (option_info[opt[k]].o_var == &reduce_uniques)
+                else if (option_info[entry->idx].o_var == &reduce_uniques)
                 {
                     if (!reduce_uniques)
                     {
@@ -1105,23 +1733,23 @@ void do_cmd_options_aux(int page, cptr info)
                         if (reduce_uniques_pct >= 100) reduce_uniques = FALSE;
                     }
                 }
-                else if (option_info[opt[k]].o_var == &ironman_empty_levels)
+                else if (option_info[entry->idx].o_var == &ironman_empty_levels)
                 {
                     generate_empty++;
                     if (generate_empty == EMPTY_MAX) generate_empty = 0;
                     ironman_empty_levels = (generate_empty == EMPTY_ALWAYS);
                 }
-                else if (option_info[opt[k]].o_var == &single_pantheon)
+                else if (option_info[entry->idx].o_var == &single_pantheon)
                 {
                     pantheon_count++;
                     if (pantheon_count >= PANTHEON_MAX) pantheon_count = 1;
                 }
-                else if (option_info[opt[k]].o_var == &guaranteed_pantheon)
+                else if (option_info[entry->idx].o_var == &guaranteed_pantheon)
                 {
                     game_pantheon++;
                     if (game_pantheon >= PANTHEON_MAX) game_pantheon = 0;
                 }
-                else if (option_info[opt[k]].o_var == &always_small_levels)
+                else if (option_info[entry->idx].o_var == &always_small_levels)
                 {
                     if (!always_small_levels)
                     {
@@ -1140,7 +1768,7 @@ void do_cmd_options_aux(int page, cptr info)
                 }
                 else
                 {
-                    (*option_info[opt[k]].o_var) = TRUE;
+                    (*option_info[entry->idx].o_var) = TRUE;
                     k = (k + 1) % n;
                     if (scroll_mode)
                     {
@@ -1156,8 +1784,37 @@ void do_cmd_options_aux(int page, cptr info)
             case '4':
             case SKEY_LEFT:
             {
+                opt_entry_t *entry = &entries[k];
+
                 if (browse_only) break;
-                if (option_info[opt[k]].o_var == &random_artifacts)
+
+                if (entry->type == OPT_ENTRY_SPECIAL)
+                {
+                    switch (entry->idx)
+                    {
+                        case OPT_SPECIAL_DELAY_FACTOR:
+                            if (delay_factor > 0) delay_factor--;
+                            break;
+                        case OPT_SPECIAL_HITPOINT_WARN:
+                            if (hitpoint_warn > 0) hitpoint_warn--;
+                            break;
+                        case OPT_SPECIAL_MANA_WARN:
+                            if (mana_warn > 0) mana_warn--;
+                            break;
+                        case OPT_SPECIAL_AUTOSAVE_L:
+                            autosave_l = FALSE;
+                            break;
+                        case OPT_SPECIAL_AUTOSAVE_T:
+                            autosave_t = FALSE;
+                            break;
+                        case OPT_SPECIAL_AUTOSAVE_FREQ:
+                            autosave_freq = toggle_frequency(autosave_freq);
+                            break;
+                    }
+                    break;
+                }
+
+                if (option_info[entry->idx].o_var == &random_artifacts)
                 {
                     if (!random_artifacts)
                     {
@@ -1170,7 +1827,7 @@ void do_cmd_options_aux(int page, cptr info)
                         if (random_artifact_pct <= 0) random_artifacts = FALSE;
                     }
                 }
-                else if (option_info[opt[k]].o_var == &reduce_uniques)
+                else if (option_info[entry->idx].o_var == &reduce_uniques)
                 {
                     if (!reduce_uniques)
                     {
@@ -1187,33 +1844,33 @@ void do_cmd_options_aux(int page, cptr info)
                         }
                     }
                 }
-                else if (option_info[opt[k]].o_var == &obj_list_width)
+                else if (option_info[entry->idx].o_var == &obj_list_width)
                 {
                     object_list_width -= 2;
                     if (object_list_width < 24) object_list_width = 24;
                 }
-                else if (option_info[opt[k]].o_var == &mon_list_width)
+                else if (option_info[entry->idx].o_var == &mon_list_width)
                 {
                     monster_list_width -= 2;
                     if (monster_list_width < 24) monster_list_width = 24;
                 }
-                else if (option_info[opt[k]].o_var == &ironman_empty_levels)
+                else if (option_info[entry->idx].o_var == &ironman_empty_levels)
                 {
                     if (generate_empty == 0) generate_empty = EMPTY_MAX - 1;
                     else generate_empty--;
                     ironman_empty_levels = (generate_empty == EMPTY_ALWAYS);
                 }
-                else if (option_info[opt[k]].o_var == &single_pantheon)
+                else if (option_info[entry->idx].o_var == &single_pantheon)
                 {
                     pantheon_count--;
                     if (pantheon_count < 1) pantheon_count = PANTHEON_MAX - 1;
                 }
-                else if (option_info[opt[k]].o_var == &guaranteed_pantheon)
+                else if (option_info[entry->idx].o_var == &guaranteed_pantheon)
                 {
                     if (game_pantheon) game_pantheon--;
                     else game_pantheon = PANTHEON_MAX - 1;
                 }
-                else if (option_info[opt[k]].o_var == &always_small_levels)
+                else if (option_info[entry->idx].o_var == &always_small_levels)
                 {
                     if (!always_small_levels)
                     {
@@ -1228,7 +1885,7 @@ void do_cmd_options_aux(int page, cptr info)
                 }
                 else
                 {
-                    (*option_info[opt[k]].o_var) = FALSE;
+                    (*option_info[entry->idx].o_var) = FALSE;
                     k = (k + 1) % n;
                     if (scroll_mode)
                     {
@@ -1242,13 +1899,21 @@ void do_cmd_options_aux(int page, cptr info)
             case 't':
             case 'T':
             {
-                if (!browse_only) (*option_info[opt[k]].o_var) = !(*option_info[opt[k]].o_var);
+                opt_entry_t *entry = &entries[k];
+
+                if (browse_only) break;
+                if (entry->type == OPT_ENTRY_OPTION)
+                    (*option_info[entry->idx].o_var) = !(*option_info[entry->idx].o_var);
                 break;
             }
 
             case '?':
             {
-                doc_display_help("option.txt", option_info[opt[k]].o_text);
+                opt_entry_t *entry = &entries[k];
+                cptr help = NULL;
+                if (entry->type == OPT_ENTRY_SPECIAL) help = options_special_help(entry->idx);
+                else help = option_info[entry->idx].o_text;
+                doc_display_help("option.txt", help);
                 Term_clear();
                 break;
             }
@@ -1259,6 +1924,2822 @@ void do_cmd_options_aux(int page, cptr info)
                 break;
             }
         }
+    }
+}
+
+static void config_options_section(int page, char *buf, size_t buf_len)
+{
+    strnfmt(buf, buf_len, "options-page-%d", page);
+}
+
+static void config_options_scan_all_slots(config_slot_info_t slots[CONFIG_MAX_SLOTS])
+{
+    int i;
+
+    for (i = 0; i < CONFIG_MAX_SLOTS; i++)
+    {
+        slots[i].used = FALSE;
+        slots[i].desc[0] = '\0';
+    }
+
+    for (i = 1; i <= 7; i++)
+    {
+        char section[32];
+        config_slot_info_t page_slots[CONFIG_MAX_SLOTS];
+        int j;
+
+        config_options_section(i, section, sizeof(section));
+        config_scan_slots(section, page_slots);
+
+        for (j = CONFIG_FIRST_USER_SLOT; j <= CONFIG_LAST_USER_SLOT; j++)
+        {
+            if (page_slots[j].used && !slots[j].used)
+            {
+                slots[j].used = TRUE;
+                strnfmt(slots[j].desc, sizeof(slots[j].desc), "%s", page_slots[j].desc);
+            }
+        }
+    }
+}
+
+static bool config_any_slots_used(config_slot_info_t slots[CONFIG_MAX_SLOTS], bool only_all_slots)
+{
+    int i;
+    for (i = CONFIG_FIRST_USER_SLOT; i <= CONFIG_LAST_USER_SLOT; i++)
+    {
+        if (only_all_slots && i < CONFIG_FIRST_ALL_SLOT) continue;
+        if (slots[i].used) return TRUE;
+    }
+    return FALSE;
+}
+
+typedef void (*config_slot_preview_f)(int slot, void *data);
+
+static void config_render_slot_menu(cptr title, config_slot_info_t slots[CONFIG_MAX_SLOTS],
+    bool only_all_slots, bool allow_delete, bool allow_duplicate)
+{
+    int row = 2;
+    int i;
+    char footer[120];
+    char range[8];
+    char range_caps[8];
+    int max_letter = 'a' + (CONFIG_LAST_USER_SLOT - CONFIG_FIRST_USER_SLOT);
+    int all_start = 'a' + (CONFIG_FIRST_ALL_SLOT - CONFIG_FIRST_USER_SLOT);
+
+    if (only_all_slots)
+        strnfmt(range, sizeof(range), "%c-%c", all_start, max_letter);
+    else
+        strnfmt(range, sizeof(range), "a-%c", max_letter);
+
+    if (only_all_slots)
+        strnfmt(range_caps, sizeof(range_caps), "%c-%c", toupper(all_start), toupper(max_letter));
+    else
+        strnfmt(range_caps, sizeof(range_caps), "A-%c", toupper(max_letter));
+
+    Term_clear();
+    prt(title, 0, 0);
+
+    for (i = CONFIG_FIRST_USER_SLOT; i <= CONFIG_LAST_USER_SLOT; i++)
+    {
+        char line[120];
+        cptr desc = slots[i].used ? slots[i].desc : "(empty)";
+
+        if (only_all_slots && i < CONFIG_FIRST_ALL_SLOT) continue;
+
+        if (i >= CONFIG_FIRST_ALL_SLOT)
+            strnfmt(line, sizeof(line), "(%c) %s (All Settings)", 'a' + (i - CONFIG_FIRST_USER_SLOT), desc);
+        else
+            strnfmt(line, sizeof(line), "(%c) %s", 'a' + (i - CONFIG_FIRST_USER_SLOT), desc);
+        prt(line, row++, 2);
+    }
+
+    if (allow_delete && allow_duplicate)
+        strnfmt(footer, sizeof(footer), "Select a slot (%s), %s to preview, '-' delete, '=' duplicate, or ESC.",
+            range, range_caps);
+    else if (allow_delete)
+        strnfmt(footer, sizeof(footer), "Select a slot (%s), %s to preview, '-' delete, or ESC.",
+            range, range_caps);
+    else if (allow_duplicate)
+        strnfmt(footer, sizeof(footer), "Select a slot (%s), %s to preview, '=' duplicate, or ESC.",
+            range, range_caps);
+    else
+        strnfmt(footer, sizeof(footer), "Select a slot (%s), %s to preview, or ESC.",
+            range, range_caps);
+    prt(footer, Term->hgt - 1, 0);
+}
+
+static bool config_prompt_slot_ex(cptr title, config_slot_info_t slots[CONFIG_MAX_SLOTS],
+    bool only_all_slots, bool require_used, bool allow_delete, bool allow_duplicate,
+    config_slot_preview_f preview_cb, void *preview_data,
+    int *slot_out, bool *delete_out, bool *duplicate_out)
+{
+    screen_save();
+    config_render_slot_menu(title, slots, only_all_slots, allow_delete, allow_duplicate);
+
+    while (1)
+    {
+        int ch = inkey();
+        int slot;
+        bool delete_mode = FALSE;
+        bool duplicate_mode = FALSE;
+        char range[8];
+        int max_letter = 'a' + (CONFIG_LAST_USER_SLOT - CONFIG_FIRST_USER_SLOT);
+        int all_start = 'a' + (CONFIG_FIRST_ALL_SLOT - CONFIG_FIRST_USER_SLOT);
+
+        if (only_all_slots)
+            strnfmt(range, sizeof(range), "%c-%c", all_start, max_letter);
+        else
+            strnfmt(range, sizeof(range), "a-%c", max_letter);
+
+        if (ch == ESCAPE)
+        {
+            screen_load();
+            return FALSE;
+        }
+
+        if ((ch == '-' || ch == '_') && allow_delete)
+        {
+            delete_mode = TRUE;
+            prt(format("Delete which slot (%s) or ESC to cancel.", range), Term->hgt - 2, 0);
+            ch = inkey();
+            if (ch == ESCAPE)
+            {
+                screen_load();
+                return FALSE;
+            }
+        }
+
+        if ((ch == '=' || ch == '+') && allow_duplicate)
+        {
+            duplicate_mode = TRUE;
+            prt(format("Duplicate which slot (%s) or ESC to cancel.", range), Term->hgt - 2, 0);
+            ch = inkey();
+            if (ch == ESCAPE)
+            {
+                screen_load();
+                return FALSE;
+            }
+        }
+
+        if (!isalpha(ch))
+        {
+            bell();
+            continue;
+        }
+
+        if (isupper(ch) && !delete_mode && !duplicate_mode)
+        {
+            slot = (tolower(ch) - 'a') + CONFIG_FIRST_USER_SLOT;
+            if (slot < CONFIG_FIRST_USER_SLOT || slot > CONFIG_LAST_USER_SLOT)
+            {
+                bell();
+                continue;
+            }
+            if (only_all_slots && slot < CONFIG_FIRST_ALL_SLOT)
+            {
+                bell();
+                continue;
+            }
+            if (preview_cb)
+                preview_cb(slot, preview_data);
+            config_render_slot_menu(title, slots, only_all_slots, allow_delete, allow_duplicate);
+            continue;
+        }
+
+        slot = (tolower(ch) - 'a') + CONFIG_FIRST_USER_SLOT;
+        if (slot < CONFIG_FIRST_USER_SLOT || slot > CONFIG_LAST_USER_SLOT)
+        {
+            bell();
+            continue;
+        }
+        if (only_all_slots && slot < CONFIG_FIRST_ALL_SLOT)
+        {
+            bell();
+            continue;
+        }
+        if (require_used && !slots[slot].used)
+        {
+            bell();
+            continue;
+        }
+
+        if (delete_out)
+            *delete_out = delete_mode;
+        if (duplicate_out)
+            *duplicate_out = duplicate_mode;
+        *slot_out = slot;
+        screen_load();
+        return TRUE;
+    }
+}
+
+static bool config_prompt_slot(cptr title, config_slot_info_t slots[CONFIG_MAX_SLOTS],
+    bool only_all_slots, bool require_used, int *slot_out)
+{
+    return config_prompt_slot_ex(title, slots, only_all_slots, require_used, FALSE, FALSE, NULL, NULL,
+        slot_out, NULL, NULL);
+}
+
+static bool config_prompt_description(char *buf, size_t buf_len)
+{
+    strnfmt(buf, buf_len, "%s", player_name);
+    if (!get_string("Description (optional): ", buf, buf_len)) return FALSE;
+    if (!buf[0]) strnfmt(buf, buf_len, "%s", player_name);
+    return TRUE;
+}
+
+static bool config_prompt_description_with_default(char *buf, size_t buf_len, cptr def)
+{
+    strnfmt(buf, buf_len, "%s", def && *def ? def : player_name);
+    if (!get_string("Description (optional): ", buf, buf_len)) return FALSE;
+    if (!buf[0]) strnfmt(buf, buf_len, "%s", def && *def ? def : player_name);
+    return TRUE;
+}
+
+static void config_trim_right(char *buf)
+{
+    size_t len = strlen(buf);
+    while (len > 0 && isspace((unsigned char)buf[len - 1]))
+        buf[--len] = '\0';
+}
+
+static void config_name_root(char *buf, size_t buf_len, cptr name)
+{
+    char tmp[80];
+    int pos = -1;
+
+    strnfmt(tmp, sizeof(tmp), "%s", name ? name : "");
+    config_trim_right(tmp);
+
+    if (find_roman_numeral(tmp, &pos) > 0 && pos > 0)
+    {
+        tmp[pos] = '\0';
+        config_trim_right(tmp);
+    }
+    else if (find_arabic_numeral(tmp, &pos) > 0 && pos > 0)
+    {
+        tmp[pos - 1] = '\0';
+        config_trim_right(tmp);
+    }
+
+    if (!tmp[0])
+        strnfmt(tmp, sizeof(tmp), "%s", name ? name : "");
+    config_trim_right(tmp);
+
+    strnfmt(buf, buf_len, "%s", tmp);
+}
+
+static bool config_read_meta_name_root(cptr section, int slot, char *buf, size_t buf_len)
+{
+    FILE *fp;
+    char path[1024];
+    char line[1024];
+    char mark[128];
+    char target_mark[128];
+    char footer_mark_str[128];
+    size_t footer_len;
+    bool in_block = FALSE;
+
+    config_build_path(path, sizeof(path));
+    fp = my_fopen(path, "r");
+    if (!fp) return FALSE;
+
+    config_build_mark(target_mark, sizeof(target_mark), section, slot);
+    sprintf(footer_mark_str, auto_dump_footer, target_mark);
+    footer_len = strlen(footer_mark_str);
+
+    while (TRUE)
+    {
+        if (my_fgets(fp, line, sizeof(line))) break;
+
+        if (config_parse_header_line(line, mark, sizeof(mark)))
+        {
+            in_block = streq(mark, target_mark);
+            continue;
+        }
+
+        if (!in_block) continue;
+        if (!strncmp(line, footer_mark_str, footer_len)) break;
+
+        if (prefix(line, "# meta: name_root="))
+        {
+            const char *root = line + strlen("# meta: name_root=");
+            strnfmt(buf, buf_len, "%s", root);
+            config_trim_right(buf);
+            my_fclose(fp);
+            return TRUE;
+        }
+    }
+
+    my_fclose(fp);
+    return FALSE;
+}
+
+static bool config_current_settings_name_root(char *buf, size_t buf_len)
+{
+    const char *sections[] = {
+        "options-page-1",
+        "macros",
+        "visuals",
+        "keymaps-rogue",
+        "keymaps-orig",
+        "window-flags",
+        "birth",
+        NULL
+    };
+    int i;
+    for (i = 0; sections[i]; i++)
+    {
+        config_slot_info_t slots[CONFIG_MAX_SLOTS];
+        config_scan_slots(sections[i], slots);
+        if (!slots[CONFIG_CURRENT_SLOT].used) continue;
+        if (config_read_meta_name_root(sections[i], CONFIG_CURRENT_SLOT, buf, buf_len))
+            return TRUE;
+    }
+    return FALSE;
+}
+
+static void config_save_current_options_page(int page)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_options_page_slot(page, CONFIG_CURRENT_SLOT, "Current Settings", name_root);
+}
+
+static void config_save_current_macros(void)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_macros_slot(CONFIG_CURRENT_SLOT, "Current Settings", name_root);
+}
+
+static void config_save_current_keymaps(int mode)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_keymaps_slot(CONFIG_CURRENT_SLOT, mode, "Current Settings", name_root);
+}
+
+static void config_save_current_visuals(void)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_visuals_slot(CONFIG_CURRENT_SLOT, "Current Settings", name_root);
+}
+
+static void config_save_current_window_flags(void)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_window_flags_slot(CONFIG_CURRENT_SLOT, "Current Settings", name_root);
+}
+
+static void config_save_current_birth(void)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_birth_slot(CONFIG_CURRENT_SLOT, "Current Settings", name_root);
+}
+
+static void config_save_current_all_settings(void)
+{
+    char name_root[80];
+    config_name_root(name_root, sizeof(name_root), player_name);
+    config_dump_all_settings_slot(CONFIG_CURRENT_SLOT, "Current Settings", name_root);
+}
+
+
+static void options_format_bool(char *buf, size_t buf_len, bool val)
+{
+    strnfmt(buf, buf_len, "%s", val ? "yes" : "no");
+}
+
+static void options_format_pct(char *buf, size_t buf_len, int val)
+{
+    if (val <= 0) strnfmt(buf, buf_len, "no");
+    else strnfmt(buf, buf_len, "%d%%", val);
+}
+
+static void options_format_autosave_freq(char *buf, size_t buf_len, int val)
+{
+    if (val <= 0) strnfmt(buf, buf_len, "off");
+    else strnfmt(buf, buf_len, "every %d turns", val);
+}
+
+static void options_diff_add(char lines[][160], int *count, int max, cptr name, cptr old_val, cptr new_val)
+{
+    if (*count >= max) return;
+    strnfmt(lines[*count], 160, "%-38s: %s -> %s", name, old_val, new_val);
+    (*count)++;
+}
+
+static void options_diff_page(int page, const options_snapshot_t *cur, const options_snapshot_t *next,
+    char lines[][160], int *count, int max)
+{
+    opt_entry_t entries[OPTIONS_MAX + 8];
+    int n = 0;
+    int i;
+
+    options_build_entries(page, entries, &n);
+
+    for (i = 0; i < n; i++)
+    {
+        opt_entry_t *entry = &entries[i];
+        char old_buf[80];
+        char new_buf[80];
+
+        if (entry->type == OPT_ENTRY_SPECIAL)
+        {
+            int old_val = 0;
+            int new_val = 0;
+            switch (entry->idx)
+            {
+                case OPT_SPECIAL_DELAY_FACTOR:
+                    old_val = cur->delay_factor;
+                    new_val = next->delay_factor;
+                    break;
+                case OPT_SPECIAL_HITPOINT_WARN:
+                    old_val = cur->hitpoint_warn;
+                    new_val = next->hitpoint_warn;
+                    break;
+                case OPT_SPECIAL_MANA_WARN:
+                    old_val = cur->mana_warn;
+                    new_val = next->mana_warn;
+                    break;
+                case OPT_SPECIAL_AUTOSAVE_L:
+                    old_val = cur->autosave_l;
+                    new_val = next->autosave_l;
+                    break;
+                case OPT_SPECIAL_AUTOSAVE_T:
+                    old_val = cur->autosave_t;
+                    new_val = next->autosave_t;
+                    break;
+                case OPT_SPECIAL_AUTOSAVE_FREQ:
+                    old_val = cur->autosave_freq;
+                    new_val = next->autosave_freq;
+                    break;
+            }
+
+            if (old_val == new_val) continue;
+
+            if (entry->idx == OPT_SPECIAL_AUTOSAVE_FREQ)
+            {
+                options_format_autosave_freq(old_buf, sizeof(old_buf), old_val);
+                options_format_autosave_freq(new_buf, sizeof(new_buf), new_val);
+            }
+            else if (entry->idx == OPT_SPECIAL_AUTOSAVE_L || entry->idx == OPT_SPECIAL_AUTOSAVE_T)
+            {
+                options_format_bool(old_buf, sizeof(old_buf), old_val != 0);
+                options_format_bool(new_buf, sizeof(new_buf), new_val != 0);
+            }
+            else if (entry->idx == OPT_SPECIAL_DELAY_FACTOR)
+            {
+                strnfmt(old_buf, sizeof(old_buf), "%d", old_val);
+                strnfmt(new_buf, sizeof(new_buf), "%d", new_val);
+            }
+            else
+            {
+                strnfmt(old_buf, sizeof(old_buf), "%d0%%", old_val);
+                strnfmt(new_buf, sizeof(new_buf), "%d0%%", new_val);
+            }
+            options_diff_add(lines, count, max, options_special_desc(entry->idx), old_buf, new_buf);
+            continue;
+        }
+
+        if (option_info[entry->idx].o_var == &random_artifacts)
+        {
+            if (cur->random_artifact_pct == next->random_artifact_pct) continue;
+            options_format_pct(old_buf, sizeof(old_buf), cur->random_artifact_pct);
+            options_format_pct(new_buf, sizeof(new_buf), next->random_artifact_pct);
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+        if (option_info[entry->idx].o_var == &reduce_uniques)
+        {
+            if (cur->reduce_uniques_pct == next->reduce_uniques_pct) continue;
+            options_format_pct(old_buf, sizeof(old_buf), cur->reduce_uniques_pct);
+            options_format_pct(new_buf, sizeof(new_buf), next->reduce_uniques_pct);
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+        if (option_info[entry->idx].o_var == &obj_list_width)
+        {
+            if (cur->object_list_width == next->object_list_width) continue;
+            strnfmt(old_buf, sizeof(old_buf), "%d", cur->object_list_width);
+            strnfmt(new_buf, sizeof(new_buf), "%d", next->object_list_width);
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+        if (option_info[entry->idx].o_var == &mon_list_width)
+        {
+            if (cur->monster_list_width == next->monster_list_width) continue;
+            strnfmt(old_buf, sizeof(old_buf), "%d", cur->monster_list_width);
+            strnfmt(new_buf, sizeof(new_buf), "%d", next->monster_list_width);
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+        if (option_info[entry->idx].o_var == &ironman_empty_levels)
+        {
+            if (cur->generate_empty == next->generate_empty) continue;
+            strnfmt(old_buf, sizeof(old_buf), "%s", empty_lv_description[cur->generate_empty]);
+            strnfmt(new_buf, sizeof(new_buf), "%s", empty_lv_description[next->generate_empty]);
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+        if (option_info[entry->idx].o_var == &always_small_levels)
+        {
+            if (cur->small_level_type == next->small_level_type) continue;
+            strnfmt(old_buf, sizeof(old_buf), "%s", lv_size_options[cur->small_level_type]);
+            strnfmt(new_buf, sizeof(new_buf), "%s", lv_size_options[next->small_level_type]);
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+        if (option_info[entry->idx].o_var == &single_pantheon)
+        {
+            if (cur->pantheon_count == next->pantheon_count) continue;
+            strnfmt(old_buf, sizeof(old_buf), "%d of %d", cur->pantheon_count, PANTHEON_MAX - 1);
+            strnfmt(new_buf, sizeof(new_buf), "%d of %d", next->pantheon_count, PANTHEON_MAX - 1);
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+        if (option_info[entry->idx].o_var == &guaranteed_pantheon)
+        {
+            if (cur->game_pantheon == next->game_pantheon) continue;
+            if (cur->pantheon_count == PANTHEON_MAX - 1)
+                strnfmt(old_buf, sizeof(old_buf), "All");
+            else if (cur->game_pantheon > 0)
+                strnfmt(old_buf, sizeof(old_buf), "%s", pant_list[cur->game_pantheon].short_name);
+            else
+                strnfmt(old_buf, sizeof(old_buf), "None");
+            if (next->pantheon_count == PANTHEON_MAX - 1)
+                strnfmt(new_buf, sizeof(new_buf), "All");
+            else if (next->game_pantheon > 0)
+                strnfmt(new_buf, sizeof(new_buf), "%s", pant_list[next->game_pantheon].short_name);
+            else
+                strnfmt(new_buf, sizeof(new_buf), "None");
+            options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+            continue;
+        }
+
+        if (cur->opts[entry->idx] == next->opts[entry->idx]) continue;
+        options_format_bool(old_buf, sizeof(old_buf), cur->opts[entry->idx]);
+        options_format_bool(new_buf, sizeof(new_buf), next->opts[entry->idx]);
+        options_diff_add(lines, count, max, option_info[entry->idx].o_desc, old_buf, new_buf);
+    }
+}
+
+static char config_prompt_diff(cptr title, char lines[][160], int count, bool allow_all, bool confirm)
+{
+    int row = 1;
+    int i;
+    char prompt[80];
+
+    screen_save();
+    Term_clear();
+    prt(title, 0, 0);
+
+    if (count == 0)
+    {
+        prt("No changes detected.", 2, 0);
+    }
+    else
+    {
+        for (i = 0; i < count; i++)
+        {
+            if (row >= Term->hgt - 1)
+            {
+                prt("-more-", Term->hgt - 1, 0);
+                inkey();
+                Term_clear();
+                prt(title, 0, 0);
+                row = 1;
+            }
+            prt(lines[i], row++, 0);
+        }
+    }
+
+    if (!confirm)
+    {
+        prt("Press ESC to return.", Term->hgt - 1, 0);
+        while (1)
+        {
+            int ch = inkey();
+            if (ch == ESCAPE) break;
+        }
+        screen_load();
+        return 'n';
+    }
+
+    if (allow_all)
+        strnfmt(prompt, sizeof(prompt), "Apply these settings? (y/n/A)");
+    else
+        strnfmt(prompt, sizeof(prompt), "Apply these settings? (y/n)");
+    prt(prompt, Term->hgt - 1, 0);
+
+    while (1)
+    {
+        int ch = inkey();
+        if (ch == 'y' || ch == 'Y')
+        {
+            screen_load();
+            return 'y';
+        }
+        if (ch == 'n' || ch == 'N' || ch == ESCAPE)
+        {
+            screen_load();
+            return 'n';
+        }
+        if (allow_all && (ch == 'a' || ch == 'A'))
+        {
+            screen_load();
+            return 'a';
+        }
+    }
+}
+
+typedef struct config_options_preview_s config_options_preview_t;
+struct config_options_preview_s
+{
+    int page;
+};
+
+static void config_preview_options_page(int slot, void *data)
+{
+    config_options_preview_t *preview = (config_options_preview_t *)data;
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    options_snapshot_t cur;
+    options_snapshot_t next;
+    char diff_lines[512][160];
+    int diff_count = 0;
+
+    if (!preview) return;
+
+    config_options_section(preview->page, section, sizeof(section));
+    config_scan_slots(section, slots);
+    if (!slots[slot].used)
+    {
+        msg_print("Slot is empty.");
+        return;
+    }
+
+    options_snapshot_current(&cur);
+    next = cur;
+    config_for_each_line(section, slot, config_apply_snapshot_line, &next);
+    options_diff_page(preview->page, &cur, &next, diff_lines, &diff_count, 512);
+    config_prompt_diff("Option Preview", diff_lines, diff_count, FALSE, FALSE);
+}
+
+static void config_preview_options_all(int slot, void *data)
+{
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    options_snapshot_t cur;
+    options_snapshot_t next;
+    char diff_lines[512][160];
+    int diff_count = 0;
+    int page;
+
+    (void)data;
+    config_options_scan_all_slots(slots);
+    if (!slots[slot].used)
+    {
+        msg_print("Slot is empty.");
+        return;
+    }
+
+    options_snapshot_current(&cur);
+    next = cur;
+    for (page = 1; page <= 7; page++)
+    {
+        char section[32];
+        config_options_section(page, section, sizeof(section));
+        config_for_each_line(section, slot, config_apply_snapshot_line, &next);
+    }
+
+    for (page = 1; page <= 7; page++)
+        options_diff_page(page, &cur, &next, diff_lines, &diff_count, 512);
+
+    config_prompt_diff("All Settings Preview", diff_lines, diff_count, FALSE, FALSE);
+}
+
+typedef struct config_diff_entry_s config_diff_entry_t;
+struct config_diff_entry_s
+{
+    char label[80];
+    char old_val[120];
+    char new_val[120];
+    char detail1[160];
+    char detail2[160];
+};
+
+static bool config_prompt_diff_list(cptr title, config_diff_entry_t *entries, int count, bool confirm)
+{
+    int top = 0;
+    int cur = 0;
+    int rows = Term->hgt - 5;
+
+    if (count <= 0)
+    {
+        if (!confirm)
+        {
+            msg_print("No differences found.");
+            return FALSE;
+        }
+        return get_check("No differences found. Load anyway? ");
+    }
+
+    screen_save();
+    while (1)
+    {
+        int i;
+        int row = 2;
+        int ch;
+
+        Term_clear();
+        prt(title, 0, 0);
+        if (confirm)
+            prt("Use arrow keys to review changes, 'y' to confirm, ESC to cancel.", 1, 0);
+        else
+            prt("Use arrow keys to review changes, ESC to return.", 1, 0);
+
+        if (cur < top) top = cur;
+        if (cur >= top + rows) top = cur - rows + 1;
+
+        for (i = top; i < count && i < top + rows; i++)
+        {
+            byte a = (i == cur) ? TERM_L_BLUE : TERM_WHITE;
+            c_prt(a, entries[i].label, row++, 2);
+        }
+
+        if (entries[cur].detail1[0])
+            prt(entries[cur].detail1, Term->hgt - 2, 0);
+        else
+            prt(format("Old: %s", entries[cur].old_val), Term->hgt - 2, 0);
+
+        if (entries[cur].detail2[0])
+            prt(entries[cur].detail2, Term->hgt - 1, 0);
+        else
+            prt(format("New: %s", entries[cur].new_val), Term->hgt - 1, 0);
+
+        ch = inkey_special(TRUE);
+        switch (ch)
+        {
+            case ESCAPE:
+                screen_load();
+                return FALSE;
+            case 'n':
+            case 'N':
+                if (confirm)
+                {
+                    screen_load();
+                    return FALSE;
+                }
+                bell();
+                break;
+            case 'y':
+            case 'Y':
+                if (confirm)
+                {
+                    screen_load();
+                    return TRUE;
+                }
+                bell();
+                break;
+            case '8':
+            case SKEY_UP:
+                if (cur > 0) cur--;
+                break;
+            case '2':
+            case SKEY_DOWN:
+                if (cur < count - 1) cur++;
+                break;
+            case '7':
+            case SKEY_PGUP:
+            case SKEY_TOP:
+                cur = MAX(0, cur - rows);
+                break;
+            case '1':
+            case '3':
+            case SKEY_PGDOWN:
+            case SKEY_BOTTOM:
+                cur = MIN(count - 1, cur + rows);
+                break;
+            default:
+                bell();
+                break;
+        }
+    }
+}
+
+typedef struct macro_snapshot_s macro_snapshot_t;
+struct macro_snapshot_s
+{
+    int count;
+    cptr pat[MACRO_MAX];
+    cptr act[MACRO_MAX];
+};
+
+static void macro_snapshot_free(macro_snapshot_t *snap)
+{
+    int i;
+    for (i = 0; i < snap->count; i++)
+    {
+        z_string_free((char *)snap->pat[i]);
+        z_string_free((char *)snap->act[i]);
+    }
+    snap->count = 0;
+}
+
+static void macro_snapshot_add(macro_snapshot_t *snap, cptr pat, cptr act)
+{
+    if (!pat || !act) return;
+    if (streq(pat, act)) return;
+    if (snap->count >= MACRO_MAX) return;
+    snap->pat[snap->count] = z_string_make(pat);
+    snap->act[snap->count] = z_string_make(act);
+    snap->count++;
+}
+
+static int macro_snapshot_find(const macro_snapshot_t *snap, cptr pat)
+{
+    int i;
+    for (i = 0; i < snap->count; i++)
+    {
+        if (streq(snap->pat[i], pat)) return i;
+    }
+    return -1;
+}
+
+static void macro_snapshot_current(macro_snapshot_t *snap)
+{
+    int i;
+    snap->count = 0;
+    for (i = 0; i < macro__num; i++)
+    {
+        macro_snapshot_add(snap, macro__pat[i], macro__act[i]);
+    }
+}
+
+static void macro_snapshot_apply(const macro_snapshot_t *snap)
+{
+    int i;
+    macro_clear_all();
+    for (i = 0; i < snap->count; i++)
+        macro_add((char *)snap->pat[i], (char *)snap->act[i]);
+}
+
+typedef struct macro_parse_state_s macro_parse_state_t;
+struct macro_parse_state_s
+{
+    macro_snapshot_t *snap;
+    char action[1024];
+    bool have_action;
+};
+
+static int macro_snapshot_apply_line(cptr line, void *data)
+{
+    macro_parse_state_t *state = (macro_parse_state_t *)data;
+    char buf[1024];
+    char tmp[1024];
+
+    strnfmt(buf, sizeof(buf), "%s", line);
+    if (buf[1] != ':') return 0;
+
+    if (buf[0] == 'A')
+    {
+        text_to_ascii(state->action, buf + 2);
+        state->have_action = TRUE;
+        return 0;
+    }
+
+    if (buf[0] == 'P' && state->have_action)
+    {
+        text_to_ascii(tmp, buf + 2);
+        macro_snapshot_add(state->snap, tmp, state->action);
+        return 0;
+    }
+
+    return 0;
+}
+
+static void macro_snapshot_from_file(macro_snapshot_t *snap, cptr section, int slot)
+{
+    macro_parse_state_t state;
+    snap->count = 0;
+    state.snap = snap;
+    state.have_action = FALSE;
+    state.action[0] = '\0';
+    config_for_each_line(section, slot, macro_snapshot_apply_line, &state);
+}
+
+typedef struct keymap_snapshot_s keymap_snapshot_t;
+struct keymap_snapshot_s
+{
+    int mode;
+    cptr act[256];
+};
+
+static void keymap_snapshot_free(keymap_snapshot_t *snap)
+{
+    int i;
+    for (i = 0; i < 256; i++)
+    {
+        z_string_free((char *)snap->act[i]);
+        snap->act[i] = NULL;
+    }
+}
+
+static void keymap_snapshot_current(keymap_snapshot_t *snap, int mode)
+{
+    int i;
+    snap->mode = mode;
+    for (i = 0; i < 256; i++)
+    {
+        if (keymap_act[mode][i])
+            snap->act[i] = z_string_make(keymap_act[mode][i]);
+        else
+            snap->act[i] = NULL;
+    }
+}
+
+static void keymap_snapshot_apply(const keymap_snapshot_t *snap)
+{
+    int i;
+    int mode = snap->mode;
+    keymap_clear_mode(mode);
+    for (i = 0; i < 256; i++)
+    {
+        if (snap->act[i])
+            keymap_act[mode][i] = z_string_make(snap->act[i]);
+    }
+}
+
+typedef struct keymap_parse_state_s keymap_parse_state_t;
+struct keymap_parse_state_s
+{
+    keymap_snapshot_t *snap;
+    char action[1024];
+    bool have_action;
+};
+
+static int keymap_snapshot_apply_line(cptr line, void *data)
+{
+    keymap_parse_state_t *state = (keymap_parse_state_t *)data;
+    char buf[1024];
+    char tmp[1024];
+    char *zz[3];
+    int mode;
+    int key;
+
+    strnfmt(buf, sizeof(buf), "%s", line);
+    if (buf[1] != ':') return 0;
+
+    if (buf[0] == 'A')
+    {
+        text_to_ascii(state->action, buf + 2);
+        state->have_action = TRUE;
+        return 0;
+    }
+
+    if (buf[0] == 'C' && state->have_action)
+    {
+        if (tokenize(buf + 2, 2, zz, TOKENIZE_CHECKQUOTE) != 2) return 0;
+        mode = strtol(zz[0], NULL, 0);
+        if (mode != state->snap->mode) return 0;
+        text_to_ascii(tmp, zz[1]);
+        if (!tmp[0] || tmp[1]) return 0;
+        key = (byte)tmp[0];
+        z_string_free(state->snap->act[key]);
+        state->snap->act[key] = z_string_make(state->action);
+        return 0;
+    }
+
+    return 0;
+}
+
+static void keymap_snapshot_from_file(keymap_snapshot_t *snap, cptr section, int slot, int mode)
+{
+    keymap_parse_state_t state;
+    keymap_snapshot_free(snap);
+    snap->mode = mode;
+    state.snap = snap;
+    state.have_action = FALSE;
+    state.action[0] = '\0';
+    config_for_each_line(section, slot, keymap_snapshot_apply_line, &state);
+}
+
+static void keymap_clear_mode(int mode)
+{
+    int i;
+    for (i = 0; i < 256; i++)
+    {
+        z_string_free(keymap_act[mode][i]);
+        keymap_act[mode][i] = NULL;
+    }
+}
+
+
+static int config_apply_pref_line(cptr line, void *data)
+{
+    (void)data;
+    return process_pref_file_command((char *)line);
+}
+
+static int config_apply_pref_line_no_birth(cptr line, void *data)
+{
+    (void)data;
+    if (line[0] == 'B' && line[1] == ':') return 0;
+    return process_pref_file_command((char *)line);
+}
+
+static int config_apply_snapshot_line(cptr line, void *data)
+{
+    options_snapshot_t *snap = (options_snapshot_t *)data;
+    options_snapshot_apply_line(snap, line);
+    return 0;
+}
+
+static void config_dump_options_page(int page)
+{
+    int i;
+
+    for (i = 0; option_info[i].o_desc; i++)
+    {
+        if (option_info[i].o_page != page) continue;
+
+        if (option_info[i].o_var == &random_artifacts) continue;
+        if (option_info[i].o_var == &reduce_uniques) continue;
+        if (option_info[i].o_var == &ironman_empty_levels) continue;
+        if (option_info[i].o_var == &always_small_levels) continue;
+        if (option_info[i].o_var == &single_pantheon) continue;
+        if (option_info[i].o_var == &guaranteed_pantheon) continue;
+        if (option_info[i].o_var == &obj_list_width) continue;
+        if (option_info[i].o_var == &mon_list_width) continue;
+
+        if (*option_info[i].o_var)
+            auto_dump_printf("Y:%s\n", option_info[i].o_text);
+        else
+            auto_dump_printf("X:%s\n", option_info[i].o_text);
+    }
+
+    switch (page)
+    {
+        case OPT_PAGE_MAPSCREEN:
+            auto_dump_printf("O:delay_factor:%d\n", delay_factor);
+            break;
+        case OPT_PAGE_TEXT:
+            auto_dump_printf("O:mana_warn:%d\n", mana_warn);
+            break;
+        case OPT_PAGE_GAMEPLAY:
+            auto_dump_printf("O:autosave_l:%d\n", autosave_l ? 1 : 0);
+            auto_dump_printf("O:autosave_t:%d\n", autosave_t ? 1 : 0);
+            auto_dump_printf("O:autosave_freq:%d\n", autosave_freq);
+            break;
+        case OPT_PAGE_DISTURBANCE:
+            auto_dump_printf("O:hitpoint_warn:%d\n", hitpoint_warn);
+            break;
+        case OPT_PAGE_LIST:
+            auto_dump_printf("O:object_list_width:%d\n", object_list_width);
+            auto_dump_printf("O:monster_list_width:%d\n", monster_list_width);
+            break;
+        default:
+            break;
+    }
+}
+
+static void config_dump_options_page_slot(int page, int slot, cptr desc, cptr name_root)
+{
+    char section[32];
+
+    config_options_section(page, section, sizeof(section));
+    if (!config_open_dump_slot(section, slot, desc, name_root)) return;
+
+    config_dump_options_page(page);
+    close_auto_dump();
+}
+
+static void config_options_save_page(int page)
+{
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    char desc[CONFIG_DESC_LEN];
+
+    config_options_section(page, section, sizeof(section));
+    config_scan_slots(section, slots);
+
+    {
+        config_options_preview_t preview = { page };
+        if (!config_any_slots_used(slots, FALSE))
+            slot = CONFIG_FIRST_USER_SLOT;
+        else if (!config_prompt_slot_ex("Save Options (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+            config_preview_options_page, &preview, &slot, NULL, NULL)) return;
+    }
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+        return;
+
+    if (slots[slot].used && !get_check("Overwrite existing settings in this slot? "))
+        return;
+
+    if (!config_prompt_description(desc, sizeof(desc))) return;
+
+    if (!config_open_dump(section, slot, desc)) return;
+
+    config_dump_options_page(page);
+    close_auto_dump();
+    msg_print("Saved settings.");
+}
+
+static void config_options_save_all(void)
+{
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    char desc[CONFIG_DESC_LEN];
+
+    config_options_scan_all_slots(slots);
+    if (!config_prompt_slot_ex("Save All Settings (choose a slot)", slots, TRUE, FALSE, FALSE, FALSE,
+        config_preview_options_all, NULL, &slot, NULL, NULL)) return;
+
+    if (slots[slot].used && !get_check("Overwrite existing All Settings profile? "))
+        return;
+
+    if (!config_prompt_description(desc, sizeof(desc))) return;
+
+    config_dump_all_settings_slot(slot, desc, NULL);
+
+    msg_print("Saved all settings.");
+}
+
+static void config_options_load_page(int page)
+{
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    options_snapshot_t cur;
+    options_snapshot_t next;
+    char diff_lines[512][160];
+    int diff_count = 0;
+    char choice;
+    bool allow_all = FALSE;
+
+    config_options_section(page, section, sizeof(section));
+    config_scan_slots(section, slots);
+
+    {
+        config_options_preview_t preview = { page };
+        if (!config_prompt_slot_ex("Load Options (choose a slot)", slots, FALSE, TRUE, FALSE, FALSE,
+            config_preview_options_page, &preview, &slot, NULL, NULL)) return;
+    }
+
+    options_snapshot_current(&cur);
+    next = cur;
+    config_for_each_line(section, slot, config_apply_snapshot_line, &next);
+
+    options_diff_page(page, &cur, &next, diff_lines, &diff_count, 512);
+    allow_all = (slot >= CONFIG_FIRST_ALL_SLOT);
+    choice = config_prompt_diff("Option Changes", diff_lines, diff_count, allow_all, TRUE);
+
+    if (choice == 'a')
+    {
+        config_options_load_all_slot(slot);
+        return;
+    }
+    if (choice != 'y') return;
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT)
+        msg_print("Note: This loads only this options page. Use the main options menu to load all settings.");
+
+    config_for_each_line(section, slot, config_apply_pref_line, NULL);
+    msg_print("Loaded settings.");
+}
+
+static void config_options_load_all(void)
+{
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    bool do_delete = FALSE;
+    bool do_duplicate = FALSE;
+
+    config_options_scan_all_slots(slots);
+    if (!config_prompt_slot_ex("Load All Settings (choose a slot)", slots, TRUE, TRUE, TRUE, TRUE,
+        config_preview_options_all, NULL, &slot, &do_delete, &do_duplicate)) return;
+    if (do_delete)
+    {
+        if (!get_check("Delete this All Settings profile? ")) return;
+        config_remove_all_settings_slot(slot);
+        msg_print("Deleted all settings profile.");
+        return;
+    }
+    if (do_duplicate)
+    {
+        int dst_slot;
+        char desc[CONFIG_DESC_LEN];
+        if (!config_prompt_slot_ex("Duplicate to which slot", slots, TRUE, FALSE, FALSE, FALSE,
+            config_preview_options_all, NULL, &dst_slot, NULL, NULL)) return;
+
+        if (dst_slot == slot)
+        {
+            msg_print("Source and destination are the same.");
+            return;
+        }
+        if (slots[dst_slot].used && !get_check("Overwrite existing profile in destination slot? "))
+            return;
+
+        if (!config_prompt_description_with_default(desc, sizeof(desc), slots[slot].desc)) return;
+
+        config_copy_all_settings_slot(slot, dst_slot, desc);
+        msg_print("Duplicated all settings profile.");
+        return;
+    }
+    config_options_load_all_slot(slot);
+}
+
+static void config_options_load_all_slot(int slot)
+{
+    options_snapshot_t cur;
+    options_snapshot_t next;
+    char diff_lines[512][160];
+    int diff_count = 0;
+    int page;
+    char choice;
+    int mode = rogue_like_commands ? KEYMAP_MODE_ROGUE : KEYMAP_MODE_ORIG;
+
+    options_snapshot_current(&cur);
+    next = cur;
+
+    for (page = 1; page <= 7; page++)
+    {
+        char section[32];
+        config_options_section(page, section, sizeof(section));
+        config_for_each_line(section, slot, config_apply_snapshot_line, &next);
+    }
+
+    for (page = 1; page <= 7; page++)
+        options_diff_page(page, &cur, &next, diff_lines, &diff_count, 512);
+
+    choice = config_prompt_diff("All Settings Changes", diff_lines, diff_count, FALSE, TRUE);
+    if (choice != 'y') return;
+
+    for (page = 1; page <= 7; page++)
+    {
+        char section[32];
+        config_options_section(page, section, sizeof(section));
+        config_for_each_line(section, slot, config_apply_pref_line, NULL);
+    }
+    config_apply_window_flags_slot(slot);
+    config_apply_macros_slot(slot);
+    config_apply_keymaps_slot(slot, mode);
+    config_apply_visuals_slot(slot);
+    config_apply_birth_options_slot(slot);
+    msg_print("Loaded all settings.");
+}
+
+static void config_options_reset_page(int page)
+{
+    options_snapshot_t cur;
+    options_snapshot_t next;
+    char diff_lines[512][160];
+    int diff_count = 0;
+    char choice;
+
+    if (page == OPT_PAGE_BIRTH)
+    {
+        msg_print("Birth settings are reset from the birth screen.");
+        return;
+    }
+
+    options_snapshot_current(&cur);
+    options_snapshot_defaults(&next);
+    options_diff_page(page, &cur, &next, diff_lines, &diff_count, 512);
+
+    choice = config_prompt_diff("Reset Options", diff_lines, diff_count, TRUE, TRUE);
+    if (choice == 'a')
+    {
+        config_options_reset_all();
+        return;
+    }
+    if (choice != 'y') return;
+
+    for (int i = 0; option_info[i].o_desc; i++)
+    {
+        if (option_info[i].o_page != page) continue;
+        if (option_info[i].o_var)
+            *option_info[i].o_var = option_info[i].o_norm ? TRUE : FALSE;
+    }
+
+    switch (page)
+    {
+        case OPT_PAGE_MAPSCREEN:
+            delay_factor = DEFAULT_DELAY_FACTOR;
+            break;
+        case OPT_PAGE_TEXT:
+            mana_warn = DEFAULT_MANA_WARN;
+            break;
+        case OPT_PAGE_GAMEPLAY:
+            autosave_l = DEFAULT_AUTOSAVE_L;
+            autosave_t = DEFAULT_AUTOSAVE_T;
+            autosave_freq = DEFAULT_AUTOSAVE_FREQ;
+            break;
+        case OPT_PAGE_DISTURBANCE:
+            hitpoint_warn = DEFAULT_HITPOINT_WARN;
+            break;
+        case OPT_PAGE_LIST:
+            object_list_width = DEFAULT_OBJECT_LIST_WIDTH;
+            monster_list_width = DEFAULT_MONSTER_LIST_WIDTH;
+            break;
+        default:
+            break;
+    }
+
+    msg_print("Reset settings to defaults.");
+}
+
+static void config_options_reset_all(void)
+{
+    options_snapshot_t cur;
+    options_snapshot_t next;
+    char diff_lines[512][160];
+    int diff_count = 0;
+    int page;
+    char choice;
+
+    options_snapshot_current(&cur);
+    options_snapshot_defaults(&next);
+    for (page = 1; page <= 7; page++)
+        options_diff_page(page, &cur, &next, diff_lines, &diff_count, 512);
+
+    choice = config_prompt_diff("Reset All Settings", diff_lines, diff_count, FALSE, TRUE);
+    if (choice != 'y') return;
+
+    for (int i = 0; option_info[i].o_desc; i++)
+    {
+        if (!option_info[i].o_var) continue;
+        if (option_info[i].o_page >= OPT_PAGE_INPUT && option_info[i].o_page <= OPT_PAGE_LIST)
+            *option_info[i].o_var = option_info[i].o_norm ? TRUE : FALSE;
+    }
+
+    delay_factor = DEFAULT_DELAY_FACTOR;
+    hitpoint_warn = DEFAULT_HITPOINT_WARN;
+    mana_warn = DEFAULT_MANA_WARN;
+    autosave_l = DEFAULT_AUTOSAVE_L;
+    autosave_t = DEFAULT_AUTOSAVE_T;
+    autosave_freq = DEFAULT_AUTOSAVE_FREQ;
+    object_list_width = DEFAULT_OBJECT_LIST_WIDTH;
+    monster_list_width = DEFAULT_MONSTER_LIST_WIDTH;
+
+    msg_print("Reset all settings to defaults.");
+}
+
+static void config_macros_section(char *buf, size_t buf_len)
+{
+    strnfmt(buf, buf_len, "macros");
+}
+
+static void config_keymaps_section(int mode, char *buf, size_t buf_len)
+{
+    if (mode == KEYMAP_MODE_ROGUE)
+        strnfmt(buf, buf_len, "keymaps-rogue");
+    else
+        strnfmt(buf, buf_len, "keymaps-orig");
+}
+
+static void config_visuals_section(char *buf, size_t buf_len)
+{
+    strnfmt(buf, buf_len, "visuals");
+}
+
+static void config_window_flags_section(char *buf, size_t buf_len)
+{
+    strnfmt(buf, buf_len, "window-flags");
+}
+
+static void config_dump_macros_slot(int slot, cptr desc, cptr name_root)
+{
+    char section[32];
+    int i;
+    char buf[1024];
+
+    config_macros_section(section, sizeof(section));
+    if (!config_open_dump_slot(section, slot, desc, name_root)) return;
+
+    auto_dump_printf("# Macro definitions\n");
+    for (i = 0; i < macro__num; i++)
+    {
+        if (streq(macro__pat[i], macro__act[i])) continue;
+        ascii_to_text(buf, macro__act[i]);
+        auto_dump_printf("A:%s\n", buf);
+        ascii_to_text(buf, macro__pat[i]);
+        auto_dump_printf("P:%s\n\n", buf);
+    }
+
+    close_auto_dump();
+}
+
+static void config_dump_keymaps_slot(int slot, int mode, cptr desc, cptr name_root)
+{
+    char section[32];
+    int i;
+    char buf[1024];
+    char key[32];
+
+    config_keymaps_section(mode, section, sizeof(section));
+    if (!config_open_dump_slot(section, slot, desc, name_root)) return;
+
+    auto_dump_printf("# Keymap definitions\n");
+    for (i = 0; i < 256; i++)
+    {
+        cptr act = keymap_act[mode][i];
+        if (!act) continue;
+        ascii_to_text(buf, act);
+        auto_dump_printf("A:%s\n", buf);
+        buf[0] = (char)i;
+        buf[1] = '\0';
+        ascii_to_text(key, buf);
+        auto_dump_printf("C:%d:%s\n", mode, key);
+    }
+
+    close_auto_dump();
+}
+
+static void config_dump_visuals_slot(int slot, cptr desc, cptr name_root)
+{
+    char section[32];
+    int i;
+
+    config_visuals_section(section, sizeof(section));
+    if (!config_open_dump_slot(section, slot, desc, name_root)) return;
+
+    auto_dump_printf("# Visual definitions\n");
+
+    for (i = 0; i < max_r_idx; i++)
+    {
+        monster_race *r_ptr = &r_info[i];
+        if (!r_ptr->name) continue;
+        if (r_ptr->x_attr == r_ptr->d_attr && r_ptr->x_char == r_ptr->d_char) continue;
+        auto_dump_printf("# %s\n", (r_name + r_ptr->name));
+        auto_dump_printf("R:%d:0x%02X/0x%02X\n\n", i, r_ptr->x_attr, r_ptr->x_char);
+    }
+
+    for (i = 0; i < max_k_idx; i++)
+    {
+        object_kind *k_ptr = &k_info[i];
+        char o_name[80];
+        if (!k_ptr->name) continue;
+        if (k_ptr->x_attr == k_ptr->d_attr && k_ptr->x_char == k_ptr->d_char) continue;
+        if (!k_ptr->flavor) strip_name(o_name, i);
+        else
+        {
+            object_type forge;
+            object_prep(&forge, i);
+            object_desc(o_name, &forge, OD_FORCE_FLAVOR);
+        }
+        auto_dump_printf("# %s\n", o_name);
+        auto_dump_printf("K:%d:%d:0x%02X/0x%02X\n\n",
+            k_ptr->tval, k_ptr->sval, k_ptr->x_attr, k_ptr->x_char);
+    }
+
+    for (i = 0; i < max_f_idx; i++)
+    {
+        feature_type *f_ptr = &f_info[i];
+        if (!f_ptr->name) continue;
+        if (f_ptr->mimic != i) continue;
+        if (f_ptr->x_attr[F_LIT_STANDARD] == f_ptr->d_attr[F_LIT_STANDARD] &&
+            f_ptr->x_char[F_LIT_STANDARD] == f_ptr->d_char[F_LIT_STANDARD] &&
+            f_ptr->x_attr[F_LIT_LITE] == f_ptr->d_attr[F_LIT_LITE] &&
+            f_ptr->x_char[F_LIT_LITE] == f_ptr->d_char[F_LIT_LITE] &&
+            f_ptr->x_attr[F_LIT_DARK] == f_ptr->d_attr[F_LIT_DARK] &&
+            f_ptr->x_char[F_LIT_DARK] == f_ptr->d_char[F_LIT_DARK])
+            continue;
+
+        auto_dump_printf("# %s\n", (f_name + f_ptr->name));
+        auto_dump_printf("F:%d:0x%02X/0x%02X:0x%02X/0x%02X:0x%02X/0x%02X\n\n", i,
+            f_ptr->x_attr[F_LIT_STANDARD], f_ptr->x_char[F_LIT_STANDARD],
+            f_ptr->x_attr[F_LIT_LITE], f_ptr->x_char[F_LIT_LITE],
+            f_ptr->x_attr[F_LIT_DARK], f_ptr->x_char[F_LIT_DARK]);
+    }
+
+    close_auto_dump();
+}
+
+static void config_dump_window_flags_slot(int slot, cptr desc, cptr name_root)
+{
+    char section[32];
+    int term;
+
+    config_window_flags_section(section, sizeof(section));
+    if (!config_open_dump_slot(section, slot, desc, name_root)) return;
+
+    auto_dump_printf("# Window flag order and locks\n");
+
+    for (term = 1; term < 8; term++)
+    {
+        int i;
+
+        if (window_flag_order_count[term] == 0) continue;
+
+        auto_dump_printf("W:%d:%d:", term, window_flag_order_index[term]);
+        for (i = 0; i < window_flag_order_count[term]; i++)
+        {
+            if (i) auto_dump_printf(",");
+            auto_dump_printf("%d", window_flag_order[term][i]);
+        }
+        auto_dump_printf("\n");
+    }
+
+    close_auto_dump();
+}
+
+static void config_dump_birth_slot(int slot, cptr desc, cptr name_root)
+{
+    if (!config_open_dump_slot("birth", slot, desc, name_root)) return;
+
+    auto_dump_printf("# Birth profile\n");
+    auto_dump_printf("B:game_mode:%d\n", game_mode);
+    auto_dump_printf("B:psex:%d\n", p_ptr->psex);
+    auto_dump_printf("B:prace:%d\n", p_ptr->prace);
+    auto_dump_printf("B:psubrace:%d\n", p_ptr->psubrace);
+    auto_dump_printf("B:pclass:%d\n", p_ptr->pclass);
+    auto_dump_printf("B:psubclass:%d\n", p_ptr->psubclass);
+    auto_dump_printf("B:personality:%d\n", p_ptr->personality);
+    auto_dump_printf("B:realm1:%d\n", p_ptr->realm1);
+    auto_dump_printf("B:realm2:%d\n", p_ptr->realm2);
+    auto_dump_printf("B:dragon_realm:%d\n", p_ptr->dragon_realm);
+
+    config_dump_options_page(OPT_PAGE_BIRTH);
+    close_auto_dump();
+}
+
+static void config_dump_all_settings_slot(int slot, cptr desc, cptr name_root)
+{
+    int mode = rogue_like_commands ? KEYMAP_MODE_ROGUE : KEYMAP_MODE_ORIG;
+    int page;
+
+    for (page = 1; page <= 7; page++)
+        config_dump_options_page_slot(page, slot, desc, name_root);
+    config_dump_window_flags_slot(slot, desc, name_root);
+    config_dump_macros_slot(slot, desc, name_root);
+    config_dump_keymaps_slot(slot, mode, desc, name_root);
+    config_dump_visuals_slot(slot, desc, name_root);
+    config_dump_birth_slot(slot, desc, name_root);
+}
+
+static void config_apply_macros_slot(int slot)
+{
+    char section[32];
+    config_macros_section(section, sizeof(section));
+    macro_clear_all();
+    config_for_each_line(section, slot, config_apply_pref_line, NULL);
+}
+
+static void config_apply_keymaps_slot(int slot, int mode)
+{
+    char section[32];
+    config_keymaps_section(mode, section, sizeof(section));
+    keymap_clear_mode(mode);
+    config_for_each_line(section, slot, config_apply_pref_line, NULL);
+}
+
+static void config_apply_visuals_slot(int slot)
+{
+    char section[32];
+    config_visuals_section(section, sizeof(section));
+    config_for_each_line(section, slot, config_apply_pref_line, NULL);
+}
+
+static void config_apply_window_flags_slot(int slot)
+{
+    char section[32];
+    int term;
+    u32b mask = 0L;
+    config_window_flags_section(section, sizeof(section));
+    config_for_each_line(section, slot, config_apply_pref_line, NULL);
+    window_flag_order_sync_all();
+    for (term = 1; term < 8; term++)
+        mask |= window_flag_active[term];
+    if (mask)
+    {
+        p_ptr->window |= mask;
+        window_stuff();
+    }
+}
+
+static void config_apply_birth_options_slot(int slot)
+{
+    config_for_each_line("birth", slot, config_apply_pref_line_no_birth, NULL);
+}
+
+static void config_remove_all_settings_slot(int slot)
+{
+    int page;
+    for (page = 1; page <= 7; page++)
+    {
+        char section[32];
+        config_options_section(page, section, sizeof(section));
+        config_remove_block(section, slot);
+    }
+    config_remove_block("macros", slot);
+    config_remove_block("keymaps-rogue", slot);
+    config_remove_block("keymaps-orig", slot);
+    config_remove_block("visuals", slot);
+    config_remove_block("window-flags", slot);
+    config_remove_block("birth", slot);
+}
+
+static void config_copy_all_settings_slot(int src_slot, int dst_slot, cptr desc)
+{
+    int page;
+    for (page = 1; page <= 7; page++)
+    {
+        char section[32];
+        config_options_section(page, section, sizeof(section));
+        config_copy_block(section, src_slot, dst_slot, desc);
+    }
+    config_copy_block("macros", src_slot, dst_slot, desc);
+    config_copy_block("keymaps-rogue", src_slot, dst_slot, desc);
+    config_copy_block("keymaps-orig", src_slot, dst_slot, desc);
+    config_copy_block("visuals", src_slot, dst_slot, desc);
+    config_copy_block("window-flags", src_slot, dst_slot, desc);
+    config_copy_block("birth", src_slot, dst_slot, desc);
+}
+
+typedef struct config_keymap_preview_s config_keymap_preview_t;
+struct config_keymap_preview_s
+{
+    int mode;
+};
+
+static void config_scan_slots_macros_keymaps(config_slot_info_t slots[CONFIG_MAX_SLOTS], int mode)
+{
+    config_slot_info_t macro_slots[CONFIG_MAX_SLOTS];
+    config_slot_info_t keymap_slots[CONFIG_MAX_SLOTS];
+    char section[32];
+    int i;
+
+    config_scan_slots("macros", macro_slots);
+    config_keymaps_section(mode, section, sizeof(section));
+    config_scan_slots(section, keymap_slots);
+
+    for (i = 0; i < CONFIG_MAX_SLOTS; i++)
+    {
+        bool macro_used = macro_slots[i].used;
+        bool keymap_used = keymap_slots[i].used;
+        slots[i].used = macro_used || keymap_used;
+        slots[i].desc[0] = '\0';
+        if (macro_used && keymap_used)
+        {
+            if (streq(macro_slots[i].desc, keymap_slots[i].desc))
+                strnfmt(slots[i].desc, sizeof(slots[i].desc), "%s", macro_slots[i].desc);
+            else
+                strnfmt(slots[i].desc, sizeof(slots[i].desc), "Macros: %s / Keymaps: %s",
+                    macro_slots[i].desc, keymap_slots[i].desc);
+        }
+        else if (macro_used)
+            strnfmt(slots[i].desc, sizeof(slots[i].desc), "%s", macro_slots[i].desc);
+        else if (keymap_used)
+            strnfmt(slots[i].desc, sizeof(slots[i].desc), "%s", keymap_slots[i].desc);
+    }
+}
+
+static void config_preview_macros_keymaps(int slot, void *data)
+{
+    config_keymap_preview_t *preview = (config_keymap_preview_t *)data;
+    config_slot_info_t macro_slots[CONFIG_MAX_SLOTS];
+    config_slot_info_t keymap_slots[CONFIG_MAX_SLOTS];
+    char section[32];
+    bool any = FALSE;
+
+    config_scan_slots("macros", macro_slots);
+    config_keymaps_section(preview->mode, section, sizeof(section));
+    config_scan_slots(section, keymap_slots);
+
+    if (macro_slots[slot].used)
+    {
+        any = TRUE;
+        config_preview_macros(slot, NULL);
+    }
+
+    if (keymap_slots[slot].used)
+    {
+        any = TRUE;
+        config_preview_keymaps(slot, preview);
+    }
+
+    if (!any)
+        msg_print("Slot is empty.");
+}
+
+static void config_preview_macros(int slot, void *data)
+{
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    macro_snapshot_t cur;
+    macro_snapshot_t next;
+    config_diff_entry_t diff_entries[512];
+    int diff_count = 0;
+
+    (void)data;
+    config_macros_section(section, sizeof(section));
+    config_scan_slots(section, slots);
+    if (!slots[slot].used)
+    {
+        msg_print("Slot is empty.");
+        return;
+    }
+
+    macro_snapshot_current(&cur);
+    macro_snapshot_from_file(&next, section, slot);
+    config_macro_diff(&cur, &next, diff_entries, &diff_count, 512);
+    config_prompt_diff_list("Macro Preview", diff_entries, diff_count, FALSE);
+    macro_snapshot_free(&cur);
+    macro_snapshot_free(&next);
+}
+
+static void config_preview_keymaps(int slot, void *data)
+{
+    config_keymap_preview_t *preview = (config_keymap_preview_t *)data;
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    keymap_snapshot_t cur;
+    keymap_snapshot_t next;
+    config_diff_entry_t diff_entries[512];
+    int diff_count = 0;
+
+    config_keymaps_section(preview->mode, section, sizeof(section));
+    config_scan_slots(section, slots);
+    if (!slots[slot].used)
+    {
+        msg_print("Slot is empty.");
+        return;
+    }
+
+    keymap_snapshot_current(&cur, preview->mode);
+    memset(&next, 0, sizeof(next));
+    keymap_snapshot_from_file(&next, section, slot, preview->mode);
+    config_keymap_diff(&cur, &next, diff_entries, &diff_count, 512);
+    config_prompt_diff_list("Keymap Preview", diff_entries, diff_count, FALSE);
+    keymap_snapshot_free(&cur);
+    keymap_snapshot_free(&next);
+}
+
+static void config_preview_visuals(int slot, void *data)
+{
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    config_diff_entry_t diff_entries[512];
+    int diff_count = 0;
+    visuals_diff_state_t state;
+
+    (void)data;
+    config_visuals_section(section, sizeof(section));
+    config_scan_slots(section, slots);
+    if (!slots[slot].used)
+    {
+        msg_print("Slot is empty.");
+        return;
+    }
+
+    state.entries = diff_entries;
+    state.count = &diff_count;
+    state.max = 512;
+    config_for_each_line(section, slot, visuals_diff_apply_line, &state);
+    config_prompt_diff_list("Visual Preview", diff_entries, diff_count, FALSE);
+}
+
+static void config_macro_diff(const macro_snapshot_t *cur, const macro_snapshot_t *next,
+    config_diff_entry_t *entries, int *count, int max)
+{
+    int i;
+    for (i = 0; i < cur->count; i++)
+    {
+        int idx = macro_snapshot_find(next, cur->pat[i]);
+        if (idx < 0 || !streq(cur->act[i], next->act[idx]))
+        {
+            char pat_txt[256];
+            char old_act[256];
+            char new_act[256];
+            if (*count >= max) break;
+            ascii_to_text(pat_txt, cur->pat[i]);
+            ascii_to_text(old_act, cur->act[i]);
+            if (idx >= 0) ascii_to_text(new_act, next->act[idx]);
+            else strnfmt(new_act, sizeof(new_act), "<none>");
+            strnfmt(entries[*count].label, sizeof(entries[*count].label), "%s", pat_txt);
+            strnfmt(entries[*count].old_val, sizeof(entries[*count].old_val), "%s", old_act);
+            strnfmt(entries[*count].new_val, sizeof(entries[*count].new_val), "%s", new_act);
+            strnfmt(entries[*count].detail1, sizeof(entries[*count].detail1), "Old: %s", old_act);
+            strnfmt(entries[*count].detail2, sizeof(entries[*count].detail2), "New: %s", new_act);
+            (*count)++;
+        }
+    }
+
+    for (i = 0; i < next->count; i++)
+    {
+        if (macro_snapshot_find(cur, next->pat[i]) >= 0) continue;
+        if (*count >= max) break;
+        {
+            char pat_txt[256];
+            char new_act[256];
+            ascii_to_text(pat_txt, next->pat[i]);
+            ascii_to_text(new_act, next->act[i]);
+            strnfmt(entries[*count].label, sizeof(entries[*count].label), "%s", pat_txt);
+            strnfmt(entries[*count].old_val, sizeof(entries[*count].old_val), "<none>");
+            strnfmt(entries[*count].new_val, sizeof(entries[*count].new_val), "%s", new_act);
+            strnfmt(entries[*count].detail1, sizeof(entries[*count].detail1), "Old: <none>");
+            strnfmt(entries[*count].detail2, sizeof(entries[*count].detail2), "New: %s", new_act);
+            (*count)++;
+        }
+    }
+}
+
+static void config_keymap_diff(const keymap_snapshot_t *cur, const keymap_snapshot_t *next,
+    config_diff_entry_t *entries, int *count, int max)
+{
+    int i;
+    char key_txt[128];
+    char old_act[256];
+    char new_act[256];
+    char key_buf[2];
+
+    for (i = 0; i < 256; i++)
+    {
+        cptr old_ptr = cur->act[i];
+        cptr new_ptr = next->act[i];
+        if (old_ptr == new_ptr) continue;
+        if (old_ptr && new_ptr && streq(old_ptr, new_ptr)) continue;
+        if (*count >= max) break;
+        key_buf[0] = (char)i;
+        key_buf[1] = '\0';
+        ascii_to_text(key_txt, key_buf);
+        if (old_ptr) ascii_to_text(old_act, old_ptr);
+        else strnfmt(old_act, sizeof(old_act), "<none>");
+        if (new_ptr) ascii_to_text(new_act, new_ptr);
+        else strnfmt(new_act, sizeof(new_act), "<none>");
+        strnfmt(entries[*count].label, sizeof(entries[*count].label), "%s", key_txt);
+        strnfmt(entries[*count].old_val, sizeof(entries[*count].old_val), "%s", old_act);
+        strnfmt(entries[*count].new_val, sizeof(entries[*count].new_val), "%s", new_act);
+        strnfmt(entries[*count].detail1, sizeof(entries[*count].detail1), "Old: %s", old_act);
+        strnfmt(entries[*count].detail2, sizeof(entries[*count].detail2), "New: %s", new_act);
+        (*count)++;
+    }
+}
+
+static void config_diff_prefix(config_diff_entry_t *entries, int start, int count, cptr prefix)
+{
+    int i;
+    for (i = start; i < start + count; i++)
+    {
+        char buf[80];
+        strnfmt(buf, sizeof(buf), "%s%s", prefix, entries[i].label);
+        strnfmt(entries[i].label, sizeof(entries[i].label), "%s", buf);
+    }
+}
+
+typedef struct visuals_diff_state_s visuals_diff_state_t;
+struct visuals_diff_state_s
+{
+    config_diff_entry_t *entries;
+    int *count;
+    int max;
+};
+
+static void visuals_diff_add(visuals_diff_state_t *state, cptr label, cptr old_val, cptr new_val, cptr detail1, cptr detail2)
+{
+    if (*state->count >= state->max) return;
+    strnfmt(state->entries[*state->count].label, sizeof(state->entries[*state->count].label), "%s", label);
+    strnfmt(state->entries[*state->count].old_val, sizeof(state->entries[*state->count].old_val), "%s", old_val);
+    strnfmt(state->entries[*state->count].new_val, sizeof(state->entries[*state->count].new_val), "%s", new_val);
+    strnfmt(state->entries[*state->count].detail1, sizeof(state->entries[*state->count].detail1), "%s", detail1);
+    strnfmt(state->entries[*state->count].detail2, sizeof(state->entries[*state->count].detail2), "%s", detail2);
+    (*state->count)++;
+}
+
+static int visuals_diff_apply_line(cptr line, void *data)
+{
+    visuals_diff_state_t *state = (visuals_diff_state_t *)data;
+    char buf[1024];
+    char *zz[5];
+
+    strnfmt(buf, sizeof(buf), "%s", line);
+    if (buf[1] != ':') return 0;
+
+    if (buf[0] == 'R' && tokenize(buf + 2, 2, zz, TOKENIZE_CHECKQUOTE) == 2)
+    {
+        int idx = strtol(zz[0], NULL, 0);
+        unsigned int attr = strtol(zz[1], NULL, 0);
+        unsigned int chr = 0;
+        if (strchr(zz[1], '/'))
+        {
+            sscanf(zz[1], "0x%X/0x%X", &attr, &chr);
+        }
+        else
+        {
+            sscanf(zz[1], "%u/%u", &attr, &chr);
+        }
+        if (idx > 0 && idx < max_r_idx && r_info[idx].name)
+        {
+            monster_race *r_ptr = &r_info[idx];
+            if (r_ptr->x_attr != (byte)attr || r_ptr->x_char != (byte)chr)
+            {
+                char label[160];
+                char old_val[64];
+                char new_val[64];
+                char detail1[128];
+                char detail2[128];
+                strnfmt(label, sizeof(label), "Monster: %s", (r_name + r_ptr->name));
+                strnfmt(old_val, sizeof(old_val), "0x%02X/0x%02X", r_ptr->x_attr, r_ptr->x_char);
+                strnfmt(new_val, sizeof(new_val), "0x%02X/0x%02X", (byte)attr, (byte)chr);
+                strnfmt(detail1, sizeof(detail1), "Old: %s", old_val);
+                strnfmt(detail2, sizeof(detail2), "New: %s", new_val);
+                visuals_diff_add(state, label, old_val, new_val, detail1, detail2);
+            }
+        }
+        return 0;
+    }
+
+    if (buf[0] == 'K' && tokenize(buf + 2, 3, zz, TOKENIZE_CHECKQUOTE) == 3)
+    {
+        int tval = strtol(zz[0], NULL, 0);
+        int sval = strtol(zz[1], NULL, 0);
+        unsigned int attr = 0;
+        unsigned int chr = 0;
+        sscanf(zz[2], "0x%X/0x%X", &attr, &chr);
+        {
+            int i;
+            for (i = 0; i < max_k_idx; i++)
+            {
+                object_kind *k_ptr = &k_info[i];
+                if (!k_ptr->name) continue;
+                if (k_ptr->tval != tval || k_ptr->sval != sval) continue;
+                if (k_ptr->x_attr != (byte)attr || k_ptr->x_char != (byte)chr)
+                {
+                    char label[160];
+                    char old_val[64];
+                    char new_val[64];
+                    char detail1[128];
+                    char detail2[128];
+                    char o_name[80];
+                    if (!k_ptr->flavor)
+                        strip_name(o_name, i);
+                    else
+                    {
+                        object_type forge;
+                        object_prep(&forge, i);
+                        object_desc(o_name, &forge, OD_FORCE_FLAVOR);
+                    }
+                    strnfmt(label, sizeof(label), "Object: %s", o_name);
+                    strnfmt(old_val, sizeof(old_val), "0x%02X/0x%02X", k_ptr->x_attr, k_ptr->x_char);
+                    strnfmt(new_val, sizeof(new_val), "0x%02X/0x%02X", (byte)attr, (byte)chr);
+                    strnfmt(detail1, sizeof(detail1), "Old: %s", old_val);
+                    strnfmt(detail2, sizeof(detail2), "New: %s", new_val);
+                    visuals_diff_add(state, label, old_val, new_val, detail1, detail2);
+                }
+                break;
+            }
+        }
+        return 0;
+    }
+
+    if (buf[0] == 'F' && tokenize(buf + 2, 2, zz, TOKENIZE_CHECKQUOTE) == 2)
+    {
+        int idx = strtol(zz[0], NULL, 0);
+        unsigned int a1, c1, a2, c2, a3, c3;
+        if (sscanf(zz[1], "0x%X/0x%X:0x%X/0x%X:0x%X/0x%X", &a1, &c1, &a2, &c2, &a3, &c3) == 6)
+        {
+            if (idx >= 0 && idx < max_f_idx && f_info[idx].name)
+            {
+                feature_type *f_ptr = &f_info[idx];
+                if (f_ptr->x_attr[F_LIT_STANDARD] != (byte)a1 || f_ptr->x_char[F_LIT_STANDARD] != (byte)c1 ||
+                    f_ptr->x_attr[F_LIT_LITE] != (byte)a2 || f_ptr->x_char[F_LIT_LITE] != (byte)c2 ||
+                    f_ptr->x_attr[F_LIT_DARK] != (byte)a3 || f_ptr->x_char[F_LIT_DARK] != (byte)c3)
+                {
+                    char label[160];
+                    char old_val[120];
+                    char new_val[120];
+                    char detail1[160];
+                    char detail2[160];
+                    strnfmt(label, sizeof(label), "Feature: %s", (f_name + f_ptr->name));
+                    strnfmt(old_val, sizeof(old_val), "Std %02X/%02X Lit %02X/%02X Dark %02X/%02X",
+                        f_ptr->x_attr[F_LIT_STANDARD], f_ptr->x_char[F_LIT_STANDARD],
+                        f_ptr->x_attr[F_LIT_LITE], f_ptr->x_char[F_LIT_LITE],
+                        f_ptr->x_attr[F_LIT_DARK], f_ptr->x_char[F_LIT_DARK]);
+                    strnfmt(new_val, sizeof(new_val), "Std %02X/%02X Lit %02X/%02X Dark %02X/%02X",
+                        (byte)a1, (byte)c1, (byte)a2, (byte)c2, (byte)a3, (byte)c3);
+                    strnfmt(detail1, sizeof(detail1), "Old: %s", old_val);
+                    strnfmt(detail2, sizeof(detail2), "New: %s", new_val);
+                    visuals_diff_add(state, label, old_val, new_val, detail1, detail2);
+                }
+            }
+        }
+        return 0;
+    }
+
+    return 0;
+}
+
+static void config_macros_save(void)
+{
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    char desc[CONFIG_DESC_LEN];
+    int mode = rogue_like_commands ? KEYMAP_MODE_ROGUE : KEYMAP_MODE_ORIG;
+
+    config_scan_slots_macros_keymaps(slots, mode);
+
+    if (!config_any_slots_used(slots, FALSE))
+        slot = CONFIG_FIRST_USER_SLOT;
+    else
+    {
+        config_keymap_preview_t preview = { mode };
+        if (!config_prompt_slot_ex("Save Macros/Keymaps (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+            config_preview_macros_keymaps, &preview, &slot, NULL, NULL)) return;
+    }
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+        return;
+
+    if (slots[slot].used && !get_check("Overwrite existing macros/keymaps in this slot? "))
+        return;
+
+    if (!config_prompt_description(desc, sizeof(desc))) return;
+    config_dump_macros_slot(slot, desc, NULL);
+    config_dump_keymaps_slot(slot, mode, desc, NULL);
+    msg_print("Saved macros/keymaps.");
+}
+
+static void config_macros_load(void)
+{
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    int mode = rogue_like_commands ? KEYMAP_MODE_ROGUE : KEYMAP_MODE_ORIG;
+    macro_snapshot_t macro_cur;
+    macro_snapshot_t macro_next;
+    keymap_snapshot_t keymap_cur;
+    keymap_snapshot_t keymap_next;
+    config_diff_entry_t diff_entries[512];
+    int diff_count = 0;
+    int macro_count = 0;
+    char section[32];
+
+    config_scan_slots_macros_keymaps(slots, mode);
+    {
+        config_keymap_preview_t preview = { mode };
+        if (!config_prompt_slot_ex("Load Macros/Keymaps (choose a slot)", slots, FALSE, TRUE, FALSE, FALSE,
+            config_preview_macros_keymaps, &preview, &slot, NULL, NULL)) return;
+    }
+
+    macro_snapshot_current(&macro_cur);
+    macro_snapshot_from_file(&macro_next, "macros", slot);
+    config_macro_diff(&macro_cur, &macro_next, diff_entries, &diff_count, 512);
+    macro_count = diff_count;
+    if (macro_count > 0)
+        config_diff_prefix(diff_entries, 0, macro_count, "Macro: ");
+
+    keymap_snapshot_current(&keymap_cur, mode);
+    memset(&keymap_next, 0, sizeof(keymap_next));
+    config_keymaps_section(mode, section, sizeof(section));
+    keymap_snapshot_from_file(&keymap_next, section, slot, mode);
+    config_keymap_diff(&keymap_cur, &keymap_next, diff_entries, &diff_count, 512);
+    if (diff_count > macro_count)
+        config_diff_prefix(diff_entries, macro_count, diff_count - macro_count, "Keymap: ");
+
+    if (!config_prompt_diff_list("Macro/Keymap Changes", diff_entries, diff_count, TRUE))
+    {
+        macro_snapshot_free(&macro_cur);
+        macro_snapshot_free(&macro_next);
+        keymap_snapshot_free(&keymap_cur);
+        keymap_snapshot_free(&keymap_next);
+        return;
+    }
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT)
+        msg_print("Note: This loads only macros/keymaps. Use the main options menu to load all settings.");
+
+    macro_clear_all();
+    keymap_clear_mode(mode);
+    config_for_each_line("macros", slot, config_apply_pref_line, NULL);
+    config_for_each_line(section, slot, config_apply_pref_line, NULL);
+
+    macro_snapshot_free(&macro_cur);
+    macro_snapshot_free(&macro_next);
+    keymap_snapshot_free(&keymap_cur);
+    keymap_snapshot_free(&keymap_next);
+    msg_print("Loaded macros/keymaps.");
+}
+
+static void config_visuals_save(void)
+{
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    char desc[CONFIG_DESC_LEN];
+    config_visuals_section(section, sizeof(section));
+    config_scan_slots(section, slots);
+
+    if (!config_any_slots_used(slots, FALSE))
+        slot = CONFIG_FIRST_USER_SLOT;
+    else if (!config_prompt_slot_ex("Save Visuals (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+        config_preview_visuals, NULL, &slot, NULL, NULL)) return;
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+        return;
+
+    if (slots[slot].used && !get_check("Overwrite existing visuals in this slot? "))
+        return;
+
+    if (!config_prompt_description(desc, sizeof(desc))) return;
+    config_dump_visuals_slot(slot, desc, NULL);
+    msg_print("Saved visuals.");
+}
+
+static void config_visuals_load(void)
+{
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    config_diff_entry_t diff_entries[512];
+    int diff_count = 0;
+    visuals_diff_state_t state;
+
+    config_visuals_section(section, sizeof(section));
+    config_scan_slots(section, slots);
+    if (!config_prompt_slot_ex("Load Visuals (choose a slot)", slots, FALSE, TRUE, FALSE, FALSE,
+        config_preview_visuals, NULL, &slot, NULL, NULL)) return;
+
+    state.entries = diff_entries;
+    state.count = &diff_count;
+    state.max = 512;
+
+    config_for_each_line(section, slot, visuals_diff_apply_line, &state);
+
+    if (!config_prompt_diff_list("Visual Changes", diff_entries, diff_count, TRUE))
+        return;
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT)
+        msg_print("Note: This loads only visuals. Use the main options menu to load all settings.");
+
+    config_for_each_line(section, slot, config_apply_pref_line, NULL);
+    msg_print("Loaded visuals.");
+}
+
+typedef struct birth_snapshot_s birth_snapshot_t;
+struct birth_snapshot_s
+{
+    int game_mode;
+    int psex;
+    int prace;
+    int psubrace;
+    int pclass;
+    int psubclass;
+    int personality;
+    int realm1;
+    int realm2;
+    int dragon_realm;
+};
+
+static cptr birth_game_mode_name(int mode)
+{
+    switch (mode)
+    {
+        case GAME_MODE_BEGINNER: return "Beginner";
+        case GAME_MODE_MONSTER: return "Monster";
+        default: return "Normal";
+    }
+}
+
+static cptr birth_realm_name(int realm)
+{
+    if (realm <= 0) return "None";
+    return realm_names[realm];
+}
+
+static cptr birth_race_name(int prace, int psubrace)
+{
+    race_t *race_ptr = get_race_aux(prace, psubrace);
+    return race_ptr ? race_ptr->name : "Unknown";
+}
+
+static cptr birth_class_name(int pclass, int psubclass)
+{
+    class_t *class_ptr = get_class_aux(pclass, psubclass);
+    return class_ptr ? class_ptr->name : "Unknown";
+}
+
+static cptr birth_personality_name(int personality)
+{
+    personality_ptr pers_ptr = get_personality_aux(personality);
+    return pers_ptr ? pers_ptr->name : "Unknown";
+}
+
+static void birth_snapshot_current(birth_snapshot_t *snap)
+{
+    snap->game_mode = game_mode;
+    snap->psex = p_ptr->psex;
+    snap->prace = p_ptr->prace;
+    snap->psubrace = p_ptr->psubrace;
+    snap->pclass = p_ptr->pclass;
+    snap->psubclass = p_ptr->psubclass;
+    snap->personality = p_ptr->personality;
+    snap->realm1 = p_ptr->realm1;
+    snap->realm2 = p_ptr->realm2;
+    snap->dragon_realm = p_ptr->dragon_realm;
+}
+
+typedef struct birth_parse_state_s birth_parse_state_t;
+struct birth_parse_state_s
+{
+    birth_snapshot_t *snap;
+};
+
+static int birth_snapshot_apply_line(cptr line, void *data)
+{
+    birth_parse_state_t *state = (birth_parse_state_t *)data;
+    char buf[1024];
+    char *zz[3];
+    int val;
+
+    strnfmt(buf, sizeof(buf), "%s", line);
+    if (buf[1] != ':') return 0;
+    if (buf[0] != 'B') return 0;
+    if (tokenize(buf + 2, 2, zz, TOKENIZE_CHECKQUOTE) != 2) return 0;
+    val = strtol(zz[1], NULL, 0);
+
+    if (streq(zz[0], "game_mode")) state->snap->game_mode = val;
+    else if (streq(zz[0], "psex")) state->snap->psex = val;
+    else if (streq(zz[0], "prace")) state->snap->prace = val;
+    else if (streq(zz[0], "psubrace")) state->snap->psubrace = val;
+    else if (streq(zz[0], "pclass")) state->snap->pclass = val;
+    else if (streq(zz[0], "psubclass")) state->snap->psubclass = val;
+    else if (streq(zz[0], "personality")) state->snap->personality = val;
+    else if (streq(zz[0], "realm1")) state->snap->realm1 = val;
+    else if (streq(zz[0], "realm2")) state->snap->realm2 = val;
+    else if (streq(zz[0], "dragon_realm")) state->snap->dragon_realm = val;
+
+    return 0;
+}
+
+static void birth_snapshot_from_file(birth_snapshot_t *snap, cptr section, int slot)
+{
+    birth_parse_state_t state;
+    birth_snapshot_current(snap);
+    state.snap = snap;
+    config_for_each_line(section, slot, birth_snapshot_apply_line, &state);
+}
+
+static void birth_diff_add(config_diff_entry_t *entries, int *count, int max, cptr label, cptr old_val, cptr new_val)
+{
+    if (*count >= max) return;
+    strnfmt(entries[*count].label, sizeof(entries[*count].label), "%s", label);
+    strnfmt(entries[*count].old_val, sizeof(entries[*count].old_val), "%s", old_val);
+    strnfmt(entries[*count].new_val, sizeof(entries[*count].new_val), "%s", new_val);
+    strnfmt(entries[*count].detail1, sizeof(entries[*count].detail1), "Old: %s", old_val);
+    strnfmt(entries[*count].detail2, sizeof(entries[*count].detail2), "New: %s", new_val);
+    (*count)++;
+}
+
+static bool config_birth_build_diff(int slot, config_diff_entry_t *diff_entries, int *diff_count)
+{
+    char section[32];
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    birth_snapshot_t cur;
+    birth_snapshot_t next;
+    options_snapshot_t cur_opts;
+    options_snapshot_t next_opts;
+    char diff_lines[256][160];
+    int diff_line_count = 0;
+    int i;
+
+    strnfmt(section, sizeof(section), "birth");
+    config_scan_slots(section, slots);
+    if (!slots[slot].used)
+        return FALSE;
+
+    birth_snapshot_current(&cur);
+    birth_snapshot_from_file(&next, section, slot);
+
+
+    if (cur.game_mode != next.game_mode)
+        birth_diff_add(diff_entries, diff_count, 512, "Game Mode",
+            birth_game_mode_name(cur.game_mode), birth_game_mode_name(next.game_mode));
+    if (cur.psex != next.psex)
+        birth_diff_add(diff_entries, diff_count, 512, "Sex",
+            sex_info[cur.psex].title, sex_info[next.psex].title);
+
+    if (cur.prace != next.prace || cur.psubrace != next.psubrace)
+    {
+        cptr old_race = birth_race_name(cur.prace, cur.psubrace);
+        cptr new_race = birth_race_name(next.prace, next.psubrace);
+        birth_diff_add(diff_entries, diff_count, 512, "Race", old_race, new_race);
+    }
+
+    if (cur.pclass != next.pclass || cur.psubclass != next.psubclass)
+    {
+        cptr old_class = birth_class_name(cur.pclass, cur.psubclass);
+        cptr new_class = birth_class_name(next.pclass, next.psubclass);
+        birth_diff_add(diff_entries, diff_count, 512, "Class", old_class, new_class);
+    }
+
+    if (cur.personality != next.personality)
+    {
+        cptr old_p = birth_personality_name(cur.personality);
+        cptr new_p = birth_personality_name(next.personality);
+        birth_diff_add(diff_entries, diff_count, 512, "Personality", old_p, new_p);
+    }
+
+    if (cur.realm1 != next.realm1)
+        birth_diff_add(diff_entries, diff_count, 512, "Realm 1",
+            birth_realm_name(cur.realm1), birth_realm_name(next.realm1));
+    if (cur.realm2 != next.realm2)
+        birth_diff_add(diff_entries, diff_count, 512, "Realm 2",
+            birth_realm_name(cur.realm2), birth_realm_name(next.realm2));
+    if (cur.dragon_realm != next.dragon_realm)
+        birth_diff_add(diff_entries, diff_count, 512, "Dragon Realm",
+            birth_realm_name(cur.dragon_realm), birth_realm_name(next.dragon_realm));
+
+    options_snapshot_current(&cur_opts);
+    next_opts = cur_opts;
+    config_for_each_line(section, slot, config_apply_snapshot_line, &next_opts);
+    options_diff_page(OPT_PAGE_BIRTH, &cur_opts, &next_opts, diff_lines, &diff_line_count, 256);
+
+    for (i = 0; i < diff_line_count; i++)
+    {
+        char *sep = strstr(diff_lines[i], ": ");
+        char *arrow = strstr(diff_lines[i], " -> ");
+        if (sep && arrow)
+        {
+            char label[64];
+            char old_val[80];
+            char new_val[80];
+            size_t label_len = (size_t)(sep - diff_lines[i]);
+            size_t old_len = (size_t)(arrow - (sep + 2));
+            strnfmt(label, sizeof(label), "%.*s", (int)label_len, diff_lines[i]);
+            strnfmt(old_val, sizeof(old_val), "%.*s", (int)old_len, sep + 2);
+            strnfmt(new_val, sizeof(new_val), "%s", arrow + 4);
+            birth_diff_add(diff_entries, diff_count, 512, label, old_val, new_val);
+        }
+        else
+        {
+            birth_diff_add(diff_entries, diff_count, 512, diff_lines[i], "", "");
+        }
+    }
+
+    return TRUE;
+}
+
+static void config_preview_birth(int slot, void *data)
+{
+    config_diff_entry_t diff_entries[512];
+    int diff_count = 0;
+
+    (void)data;
+    if (!config_birth_build_diff(slot, diff_entries, &diff_count))
+    {
+        msg_print("Slot is empty.");
+        return;
+    }
+    config_prompt_diff_list("Birth Profile Preview", diff_entries, diff_count, FALSE);
+}
+
+void config_birth_save(void)
+{
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    char desc[CONFIG_DESC_LEN];
+
+    config_scan_slots("birth", slots);
+
+    if (!config_any_slots_used(slots, FALSE))
+        slot = CONFIG_FIRST_USER_SLOT;
+    else if (!config_prompt_slot_ex("Save Birth Profile (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+        config_preview_birth, NULL, &slot, NULL, NULL)) return;
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+        return;
+
+    if (slots[slot].used && !get_check("Overwrite existing birth profile? "))
+        return;
+
+    if (!config_prompt_description(desc, sizeof(desc))) return;
+    config_dump_birth_slot(slot, desc, NULL);
+    msg_print("Saved birth profile.");
+}
+
+void config_birth_load(bool allow_load)
+{
+    config_slot_info_t slots[CONFIG_MAX_SLOTS];
+    int slot;
+    birth_snapshot_t next;
+    config_diff_entry_t diff_entries[512];
+    int diff_count = 0;
+
+    if (!allow_load)
+    {
+        msg_print("Birth profiles can only be loaded at birth or in wizard mode.");
+        return;
+    }
+
+    config_scan_slots("birth", slots);
+    if (!config_prompt_slot_ex("Load Birth Profile (choose a slot)", slots, FALSE, TRUE, FALSE, FALSE,
+        config_preview_birth, NULL, &slot, NULL, NULL)) return;
+
+    if (!config_birth_build_diff(slot, diff_entries, &diff_count))
+    {
+        msg_print("Slot is empty.");
+        return;
+    }
+
+    if (!config_prompt_diff_list("Birth Profile Changes", diff_entries, diff_count, TRUE))
+        return;
+
+    if (slot >= CONFIG_FIRST_ALL_SLOT)
+        msg_print("Note: This loads only birth profile data. Use the main options menu to load all settings.");
+
+    birth_snapshot_from_file(&next, "birth", slot);
+    config_for_each_line("birth", slot, config_apply_pref_line_no_birth, NULL);
+    config_for_each_line("birth", slot, birth_snapshot_apply_line, &next);
+
+    game_mode = next.game_mode;
+    p_ptr->psex = next.psex;
+    p_ptr->prace = next.prace;
+    p_ptr->psubrace = next.psubrace;
+    p_ptr->pclass = next.pclass;
+    p_ptr->psubclass = next.psubclass;
+    p_ptr->personality = next.personality;
+    p_ptr->realm1 = next.realm1;
+    p_ptr->realm2 = next.realm2;
+    p_ptr->dragon_realm = next.dragon_realm;
+
+    msg_print("Loaded birth profile.");
+}
+
+static bool config_prompt_save_past_character(cptr past_name)
+{
+    while (1)
+    {
+        int ch;
+        char prompt[120];
+
+        Term_clear();
+        strnfmt(prompt, sizeof(prompt), "Save settings for %s", past_name ? past_name : "previous character");
+        prt(prompt, 1, 0);
+        prt("a) Save All Settings", 3, 2);
+        prt("o) Save Game Options", 4, 2);
+        prt("w) Save Window Flags", 5, 2);
+        prt("m) Save Macros/Keymaps", 6, 2);
+        prt("v) Save Visuals", 7, 2);
+        prt("b) Save Birth Profile", 8, 2);
+        prt("ESC) Back", 11, 2);
+
+        ch = inkey();
+        if (ch == ESCAPE) return FALSE;
+
+        if (ch == 'a' || ch == 'A')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+            char desc[CONFIG_DESC_LEN];
+
+            config_options_scan_all_slots(slots);
+            if (!config_prompt_slot_ex("Save All Settings (choose a slot)", slots, TRUE, FALSE, FALSE, FALSE,
+                config_preview_options_all, NULL, &slot, NULL, NULL)) continue;
+
+            if (slots[slot].used && !get_check("Overwrite existing All Settings profile? "))
+                continue;
+
+            if (!config_prompt_description(desc, sizeof(desc))) continue;
+            config_dump_all_settings_slot(slot, desc, NULL);
+            msg_print("Saved settings.");
+            return TRUE;
+        }
+        else if (ch == 'o' || ch == 'O')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+            char desc[CONFIG_DESC_LEN];
+            int page;
+
+            config_options_scan_all_slots(slots);
+            if (!config_prompt_slot_ex("Save Game Options (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+                config_preview_options_all, NULL, &slot, NULL, NULL)) continue;
+
+            if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+                continue;
+
+            if (slots[slot].used && !get_check("Overwrite existing settings in this slot? "))
+                continue;
+
+            if (!config_prompt_description(desc, sizeof(desc))) continue;
+            for (page = 1; page <= 7; page++)
+                config_dump_options_page_slot(page, slot, desc, NULL);
+            msg_print("Saved settings.");
+            return TRUE;
+        }
+        else if (ch == 'w' || ch == 'W')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+            char desc[CONFIG_DESC_LEN];
+
+            config_scan_slots("window-flags", slots);
+            if (!config_prompt_slot_ex("Save Window Flags (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+                NULL, NULL, &slot, NULL, NULL)) continue;
+
+            if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+                continue;
+
+            if (slots[slot].used && !get_check("Overwrite existing window flags in this slot? "))
+                continue;
+
+            if (!config_prompt_description(desc, sizeof(desc))) continue;
+            config_dump_window_flags_slot(slot, desc, NULL);
+            msg_print("Saved window flags.");
+            return TRUE;
+        }
+        else if (ch == 'm' || ch == 'M' || ch == 'k' || ch == 'K')
+        {
+            config_macros_save();
+            return TRUE;
+        }
+        else if (ch == 'v' || ch == 'V')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+            char desc[CONFIG_DESC_LEN];
+
+            config_scan_slots("visuals", slots);
+            if (!config_prompt_slot_ex("Save Visuals (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+                config_preview_visuals, NULL, &slot, NULL, NULL)) continue;
+
+            if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+                continue;
+
+            if (slots[slot].used && !get_check("Overwrite existing visuals in this slot? "))
+                continue;
+
+            if (!config_prompt_description(desc, sizeof(desc))) continue;
+            config_dump_visuals_slot(slot, desc, NULL);
+            msg_print("Saved visuals.");
+            return TRUE;
+        }
+        else if (ch == 'b' || ch == 'B')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+            char desc[CONFIG_DESC_LEN];
+
+            config_scan_slots("birth", slots);
+            if (!config_prompt_slot_ex("Save Birth Profile (choose a slot)", slots, FALSE, FALSE, FALSE, FALSE,
+                config_preview_birth, NULL, &slot, NULL, NULL)) continue;
+
+            if (slot >= CONFIG_FIRST_ALL_SLOT && !get_check("This modifies an All Settings profile. Continue? "))
+                continue;
+
+            if (slots[slot].used && !get_check("Overwrite existing birth profile? "))
+                continue;
+
+            if (!config_prompt_description(desc, sizeof(desc))) continue;
+            config_dump_birth_slot(slot, desc, NULL);
+            msg_print("Saved birth profile.");
+            return TRUE;
+        }
+        else
+        {
+            bell();
+        }
+    }
+}
+
+static bool config_prompt_birth_options_apply(int slot)
+{
+    options_snapshot_t cur;
+    options_snapshot_t next;
+    char diff_lines[512][160];
+    int diff_count = 0;
+    char choice;
+
+    options_snapshot_current(&cur);
+    next = cur;
+    config_for_each_line("birth", slot, config_apply_snapshot_line, &next);
+    options_diff_page(OPT_PAGE_BIRTH, &cur, &next, diff_lines, &diff_count, 512);
+
+    if (diff_count <= 0) return FALSE;
+
+    choice = config_prompt_diff("Birth Option Changes", diff_lines, diff_count, FALSE, TRUE);
+    return choice == 'y';
+}
+
+static bool config_prompt_load_profile_birth(void)
+{
+    while (1)
+    {
+        int ch;
+        Term_clear();
+        prt("Load Settings Profile", 1, 0);
+        prt("a) Load All Settings", 3, 2);
+        prt("o) Load Game Options", 4, 2);
+        prt("w) Load Window Flags", 5, 2);
+        prt("m) Load Macros/Keymaps", 6, 2);
+        prt("v) Load Visuals", 7, 2);
+        prt("b) Load Birth Options", 8, 2);
+        prt("ESC) Back", 11, 2);
+
+        ch = inkey();
+        if (ch == ESCAPE) return FALSE;
+
+        if (ch == 'a' || ch == 'A')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+            int mode = rogue_like_commands ? KEYMAP_MODE_ROGUE : KEYMAP_MODE_ORIG;
+            int page;
+
+            config_options_scan_all_slots(slots);
+            if (!config_prompt_slot_ex("Load All Settings (choose a slot)", slots, TRUE, TRUE, FALSE, FALSE,
+                config_preview_options_all, NULL, &slot, NULL, NULL)) continue;
+
+            for (page = 1; page <= 7; page++)
+            {
+                char section[32];
+                config_options_section(page, section, sizeof(section));
+                config_for_each_line(section, slot, config_apply_pref_line, NULL);
+            }
+            config_apply_window_flags_slot(slot);
+            config_apply_macros_slot(slot);
+            config_apply_keymaps_slot(slot, mode);
+            config_apply_visuals_slot(slot);
+
+            if (config_prompt_birth_options_apply(slot))
+                config_apply_birth_options_slot(slot);
+
+            msg_print("Loaded settings.");
+            return TRUE;
+        }
+        else if (ch == 'o' || ch == 'O')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+            options_snapshot_t cur;
+            options_snapshot_t next;
+            char diff_lines[512][160];
+            int diff_count = 0;
+            int page;
+            char choice;
+
+            config_options_scan_all_slots(slots);
+            if (!config_prompt_slot_ex("Load Game Options (choose a slot)", slots, FALSE, TRUE, FALSE, FALSE,
+                config_preview_options_all, NULL, &slot, NULL, NULL)) continue;
+
+            options_snapshot_current(&cur);
+            next = cur;
+            for (page = 1; page <= 7; page++)
+            {
+                char section[32];
+                config_options_section(page, section, sizeof(section));
+                config_for_each_line(section, slot, config_apply_snapshot_line, &next);
+            }
+            for (page = 1; page <= 7; page++)
+                options_diff_page(page, &cur, &next, diff_lines, &diff_count, 512);
+
+            choice = config_prompt_diff("Option Changes", diff_lines, diff_count, FALSE, TRUE);
+            if (choice != 'y') continue;
+
+            if (slot >= CONFIG_FIRST_ALL_SLOT)
+                msg_print("Note: This loads only game options. Use the main options menu to load all settings.");
+
+            for (page = 1; page <= 7; page++)
+            {
+                char section[32];
+                config_options_section(page, section, sizeof(section));
+                config_for_each_line(section, slot, config_apply_pref_line, NULL);
+            }
+            msg_print("Loaded settings.");
+            return TRUE;
+        }
+        else if (ch == 'w' || ch == 'W')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+
+            config_scan_slots("window-flags", slots);
+            if (!config_prompt_slot_ex("Load Window Flags (choose a slot)", slots, FALSE, TRUE, FALSE, FALSE,
+                NULL, NULL, &slot, NULL, NULL)) continue;
+
+            if (slot >= CONFIG_FIRST_ALL_SLOT)
+                msg_print("Note: This loads only window flags. Use the main options menu to load all settings.");
+
+            config_apply_window_flags_slot(slot);
+            msg_print("Loaded window flags.");
+            return TRUE;
+        }
+        else if (ch == 'm' || ch == 'M' || ch == 'k' || ch == 'K')
+        {
+            config_macros_load();
+            return TRUE;
+        }
+        else if (ch == 'v' || ch == 'V')
+        {
+            config_visuals_load();
+            return TRUE;
+        }
+        else if (ch == 'b' || ch == 'B')
+        {
+            config_slot_info_t slots[CONFIG_MAX_SLOTS];
+            int slot;
+
+            config_scan_slots("birth", slots);
+            if (!config_prompt_slot_ex("Load Birth Options (choose a slot)", slots, FALSE, TRUE, FALSE, FALSE,
+                config_preview_birth, NULL, &slot, NULL, NULL)) continue;
+
+            if (!config_prompt_birth_options_apply(slot)) continue;
+            if (slot >= CONFIG_FIRST_ALL_SLOT)
+                msg_print("Note: This loads only birth options. Use the main options menu to load all settings.");
+            config_apply_birth_options_slot(slot);
+            msg_print("Loaded birth options.");
+            return TRUE;
+        }
+        else
+        {
+            bell();
+        }
+    }
+}
+
+static void config_reset_all_settings_to_defaults(void)
+{
+    options_snapshot_t def;
+    int mode = rogue_like_commands ? KEYMAP_MODE_ROGUE : KEYMAP_MODE_ORIG;
+    int term;
+
+    options_snapshot_defaults(&def);
+    options_snapshot_apply(&def);
+    macro_clear_all();
+    keymap_clear_mode(mode);
+    reset_visuals();
+
+    for (term = 1; term < 8; term++)
+        window_flag_order_clear_term(term);
+    window_flag_order_sync_all();
+}
+
+bool config_birth_settings_prompt(void)
+{
+    char saved_root[80];
+    char current_root[80];
+
+    if (!config_current_settings_name_root(saved_root, sizeof(saved_root))) return TRUE;
+    config_name_root(current_root, sizeof(current_root), player_name);
+    if (streq(saved_root, current_root)) return TRUE;
+
+    screen_save();
+    while (1)
+    {
+        int ch;
+        char buf[120];
+
+        Term_clear();
+        strnfmt(buf, sizeof(buf), "Current Settings belong to: %s", saved_root);
+        prt(buf, 1, 0);
+        strnfmt(buf, sizeof(buf), "New character: %s", current_root);
+        prt(buf, 2, 0);
+
+        prt("s) Save settings for previous character", 4, 2);
+        prt("c) Continue with existing settings", 5, 2);
+        prt("l) Continue after loading another profile", 6, 2);
+        prt("r) Continue after resetting to defaults", 7, 2);
+        prt("ESC) Return to character creation", 9, 2);
+
+        ch = inkey();
+        if (ch == ESCAPE)
+        {
+            screen_load();
+            return FALSE;
+        }
+        if (ch == 's' || ch == 'S')
+        {
+            config_prompt_save_past_character(saved_root);
+            continue;
+        }
+        if (ch == 'c' || ch == 'C')
+        {
+            screen_load();
+            return TRUE;
+        }
+        if (ch == 'l' || ch == 'L')
+        {
+            if (config_prompt_load_profile_birth())
+            {
+                screen_load();
+                return TRUE;
+            }
+            continue;
+        }
+        if (ch == 'r' || ch == 'R')
+        {
+            config_reset_all_settings_to_defaults();
+            msg_print("Settings reset to defaults.");
+            screen_load();
+            return TRUE;
+        }
+        bell();
     }
 }
 
@@ -1298,7 +4779,7 @@ static void do_cmd_options_win(void)
     while (go)
     {
         /* Prompt XXX XXX XXX */
-        prt("Window Flags (<dir>, t, y, n, ESC) ", 0, 0);
+        prt("Window Flags (<dir>, t, y, n, SPACE, ESC) ", 0, 0);
 
 
         /* Display the windows */
@@ -1403,6 +4884,22 @@ static void do_cmd_options_win(void)
                 break;
             }
 
+            case ' ':
+            {
+                if (window_flag[x] & (1L << y))
+                {
+                    order_changed[x] = TRUE;
+                    window_flag_order_remove(x, y);
+                }
+                else
+                {
+                    if (x == 0) break;
+                    order_changed[x] = TRUE;
+                    window_flag_order_add(x, y);
+                }
+                break;
+            }
+
             case '?':
             {
                 doc_display_help("option.txt", "Window");
@@ -1467,7 +4964,7 @@ static void do_cmd_options_win(void)
 
 
 
-#define OPT_NUM 15
+#define OPT_NUM 14
 
 static struct opts
 {
@@ -1485,11 +4982,10 @@ option_fields[OPT_NUM] =
     { '6', "Auto-Destroyer Options", 8 },
     { '7', "List Display Options", 9 },
 
-    { 'p', "Mogaminator Preferences", 11 },
-    { 'd', "Base Delay Factor", 12 },
-    { 'h', "Hitpoint Warning", 13 },
-    { 'm', "Mana Color Threshold", 14 },
-    { 'a', "Autosave Options", 15 },
+    { 'l', "Load All Settings", 11 },
+    { 's', "Save All Settings", 12 },
+    { 'r', "Reset All Settings", 13 },
+    { 'p', "Mogaminator Preferences", 15 },
     { 'w', "Window Flags", 16 },
 
     { 'b', "Birth Options (Browse Only)", 18 },
@@ -1631,6 +5127,27 @@ void do_cmd_options(void)
                 break;
             }
 
+            case 'l':
+            case 'L':
+            {
+                config_options_load_all();
+                break;
+            }
+
+            case 's':
+            case 'S':
+            {
+                config_options_save_all();
+                break;
+            }
+
+            case 'r':
+            case 'R':
+            {
+                config_options_reset_all();
+                break;
+            }
+
             /* Birth Options */
             case 'B':
             case 'b':
@@ -1658,13 +5175,6 @@ void do_cmd_options(void)
                 break;
             }
 
-            case 'a':
-            case 'A':
-            {
-                do_cmd_options_autosave("Autosave");
-                break;
-            }
-
             /* Window flags */
             case 'W':
             case 'w':
@@ -1683,97 +5193,6 @@ void do_cmd_options(void)
             case 'p':
             {
                 do_cmd_edit_autopick();
-                break;
-            }
-
-            /* Hack -- Delay Speed */
-            case 'D':
-            case 'd':
-            {
-                /* Prompt */
-                clear_from(18);
-                prt("Command: Base Delay Factor", 19, 0);
-
-                /* Get a new value */
-                while (1)
-                {
-                    int msec = delay_time();
-                    prt(format("Current base delay factor: %d (%d msec)",
-                           delay_factor, msec), 22, 0);
-
-                    prt("Delay Factor (0-9 or ESC to accept): ", 20, 0);
-
-                    k = inkey();
-                    if (k == ESCAPE) break;
-                    else if (k == '?')
-                    {
-                        doc_display_help("option.txt", "BaseDelay");
-                        Term_clear();
-                    }
-                    else if (isdigit(k)) delay_factor = D2I(k);
-                    else bell();
-                }
-
-                break;
-            }
-
-            /* Hack -- hitpoint warning factor */
-            case 'H':
-            case 'h':
-            {
-                /* Prompt */
-                clear_from(18);
-                prt("Command: Hitpoint Warning", 19, 0);
-
-                /* Get a new value */
-                while (1)
-                {
-                    prt(format("Current hitpoint warning: %d0%%",
-                           hitpoint_warn), 22, 0);
-
-                    prt("Hitpoint Warning (0-9 or ESC to accept): ", 20, 0);
-
-                    k = inkey();
-                    if (k == ESCAPE) break;
-                    else if (k == '?')
-                    {
-                        doc_display_help("option.txt", "HitPoint");
-                        Term_clear();
-                    }
-                    else if (isdigit(k)) hitpoint_warn = D2I(k);
-                    else bell();
-                }
-
-                break;
-            }
-
-            /* Hack -- mana color factor */
-            case 'M':
-            case 'm':
-            {
-                /* Prompt */
-                clear_from(18);
-                prt("Command: Mana Color Threshold", 19, 0);
-
-                /* Get a new value */
-                while (1)
-                {
-                    prt(format("Current mana color threshold: %d0%%",
-                           mana_warn), 22, 0);
-
-                    prt("Mana color Threshold (0-9 or ESC to accept): ", 20, 0);
-
-                    k = inkey();
-                    if (k == ESCAPE) break;
-                    else if (k == '?')
-                    {
-                        doc_display_help("option.txt", "Manapoint");
-                        Term_clear();
-                    }
-                    else if (isdigit(k)) mana_warn = D2I(k);
-                    else bell();
-                }
-
                 break;
             }
 
@@ -2062,6 +5481,8 @@ void do_cmd_macros(void)
     char buf[1024];
 
     int mode;
+    macro_snapshot_t macro_before;
+    keymap_snapshot_t keymap_before;
 
 
     /* Roguelike */
@@ -2075,6 +5496,9 @@ void do_cmd_macros(void)
     {
         mode = KEYMAP_MODE_ORIG;
     }
+
+    macro_snapshot_current(&macro_before);
+    keymap_snapshot_current(&keymap_before, mode);
 
     /* File type is "TEXT" */
     FILE_TYPE(FILE_TYPE_TEXT);
@@ -2118,11 +5542,13 @@ void do_cmd_macros(void)
         prt("(8) Create a keymap", 11, 5);
         prt("(9) Remove a keymap", 12, 5);
         prt("(0) Enter a new action", 13, 5);
+        prt("(L) Load macros/keymaps from config profile", 14, 5);
+        prt("(S) Save macros/keymaps to config profile", 15, 5);
 
 #endif /* ALLOW_MACROS */
 
         /* Prompt */
-        prt("Command: ", 16, 0);
+        prt("Command: ", 19, 0);
 
 
         /* Get a command */
@@ -2137,11 +5563,11 @@ void do_cmd_macros(void)
             errr err;
 
             /* Prompt */
-            prt("Command: Load a user pref file", 16, 0);
+            prt("Command: Load a user pref file", 19, 0);
 
 
             /* Prompt */
-            prt("File: ", 18, 0);
+            prt("File: ", 21, 0);
 
 
             /* Default filename */
@@ -2173,11 +5599,11 @@ void do_cmd_macros(void)
         else if (i == '2')
         {
             /* Prompt */
-            prt("Command: Append macros and keymaps to a file", 16, 0);
+            prt("Command: Append macros and keymaps to a file", 19, 0);
 
 
             /* Prompt */
-            prt("File: ", 18, 0);
+            prt("File: ", 21, 0);
 
 
             /* Default filename */
@@ -2201,11 +5627,11 @@ void do_cmd_macros(void)
             int k;
 
             /* Prompt */
-            prt("Command: Query a macro", 16, 0);
+            prt("Command: Query a macro", 19, 0);
 
 
             /* Prompt */
-            prt("Trigger: ", 18, 0);
+            prt("Trigger: ", 21, 0);
 
 
             /* Get a macro trigger */
@@ -2244,11 +5670,11 @@ void do_cmd_macros(void)
         else if (i == '4')
         {
             /* Prompt */
-            prt("Command: Create a macro", 16, 0);
+            prt("Command: Create a macro", 19, 0);
 
 
             /* Prompt */
-            prt("Trigger: ", 18, 0);
+            prt("Trigger: ", 21, 0);
 
 
             /* Get a macro trigger */
@@ -2286,11 +5712,11 @@ void do_cmd_macros(void)
         else if (i == '5')
         {
             /* Prompt */
-            prt("Command: Remove a macro", 16, 0);
+            prt("Command: Remove a macro", 19, 0);
 
 
             /* Prompt */
-            prt("Trigger: ", 18, 0);
+            prt("Trigger: ", 21, 0);
 
 
             /* Get a macro trigger */
@@ -2310,11 +5736,11 @@ void do_cmd_macros(void)
             cptr act;
 
             /* Prompt */
-            prt("Command: Query a keymap", 16, 0);
+            prt("Command: Query a keymap", 19, 0);
 
 
             /* Prompt */
-            prt("Keypress: ", 18, 0);
+            prt("Keypress: ", 21, 0);
 
 
             /* Get a keymap trigger */
@@ -2353,11 +5779,11 @@ void do_cmd_macros(void)
         else if (i == '8')
         {
             /* Prompt */
-            prt("Command: Create a keymap", 16, 0);
+            prt("Command: Create a keymap", 19, 0);
 
 
             /* Prompt */
-            prt("Keypress: ", 18, 0);
+            prt("Keypress: ", 21, 0);
 
 
             /* Get a keymap trigger */
@@ -2398,11 +5824,11 @@ void do_cmd_macros(void)
         else if (i == '9')
         {
             /* Prompt */
-            prt("Command: Remove a keymap", 16, 0);
+            prt("Command: Remove a keymap", 19, 0);
 
 
             /* Prompt */
-            prt("Keypress: ", 18, 0);
+            prt("Keypress: ", 21, 0);
 
 
             /* Get a keymap trigger */
@@ -2423,7 +5849,7 @@ void do_cmd_macros(void)
         else if (i == '0')
         {
             /* Prompt */
-            prt("Command: Enter a new action", 16, 0);
+            prt("Command: Enter a new action", 19, 0);
 
             /* Clear */
             clear_from(20);
@@ -2446,6 +5872,16 @@ void do_cmd_macros(void)
 
 #endif /* ALLOW_MACROS */
 
+        else if (i == 'L' || i == 'l' || i == 'K' || i == 'k')
+        {
+            config_macros_load();
+        }
+
+        else if (i == 'S' || i == 's' || i == 'M' || i == 'm')
+        {
+            config_macros_save();
+        }
+
         /* Oops */
         else
         {
@@ -2459,6 +5895,56 @@ void do_cmd_macros(void)
 
     /* Load screen */
     screen_load();
+
+    {
+        macro_snapshot_t macro_after;
+        keymap_snapshot_t keymap_after;
+        config_diff_entry_t diff_entries[512];
+        int diff_count = 0;
+        bool changed = FALSE;
+
+        macro_snapshot_current(&macro_after);
+        config_macro_diff(&macro_before, &macro_after, diff_entries, &diff_count, 512);
+        if (diff_count > 0) changed = TRUE;
+        diff_count = 0;
+
+        keymap_snapshot_current(&keymap_after, mode);
+        config_keymap_diff(&keymap_before, &keymap_after, diff_entries, &diff_count, 512);
+        if (diff_count > 0) changed = TRUE;
+
+        macro_snapshot_free(&macro_after);
+        keymap_snapshot_free(&keymap_after);
+
+        if (changed)
+        {
+            while (1)
+            {
+                int ch;
+                prt("Save macro/keymap changes to Current Settings? (y/n/r)", 0, 0);
+                ch = inkey();
+                if (ch == 'y' || ch == 'Y')
+                {
+                    config_save_current_macros();
+                    config_save_current_keymaps(mode);
+                    msg_print("Saved to Current Settings.");
+                    break;
+                }
+                if (ch == 'r' || ch == 'R')
+                {
+                    macro_snapshot_apply(&macro_before);
+                    keymap_snapshot_apply(&keymap_before);
+                    msg_print("Reverted macro/keymap changes.");
+                    break;
+                }
+                if (ch == 'n' || ch == 'N' || ch == ESCAPE)
+                    break;
+                bell();
+            }
+        }
+    }
+
+    macro_snapshot_free(&macro_before);
+    keymap_snapshot_free(&keymap_before);
 }
 
 
@@ -2515,9 +6001,106 @@ static void print_visuals_menu(cptr choice_msg)
 #endif /* ALLOW_VISUALS */
 
     prt("(R) Reset visuals", 13, 5);
+    prt("(L) Load visuals from config profile", 14, 5);
+    prt("(S) Save visuals to config profile", 15, 5);
 
     /* Prompt */
-    prt(format("Command: %s", choice_msg ? choice_msg : ""), 15, 0);
+    prt(format("Command: %s", choice_msg ? choice_msg : ""), 17, 0);
+}
+
+typedef struct visuals_snapshot_s visuals_snapshot_t;
+struct visuals_snapshot_s
+{
+    int max_r;
+    int max_k;
+    int max_f;
+    byte *r_attr;
+    byte *r_char;
+    byte *k_attr;
+    byte *k_char;
+    byte *f_attr;
+    byte *f_char;
+};
+
+static void visuals_snapshot_init(visuals_snapshot_t *snap)
+{
+    int i;
+    snap->max_r = max_r_idx;
+    snap->max_k = max_k_idx;
+    snap->max_f = max_f_idx;
+
+    C_MAKE(snap->r_attr, snap->max_r, byte);
+    C_MAKE(snap->r_char, snap->max_r, byte);
+    C_MAKE(snap->k_attr, snap->max_k, byte);
+    C_MAKE(snap->k_char, snap->max_k, byte);
+    C_MAKE(snap->f_attr, snap->max_f * F_LIT_MAX, byte);
+    C_MAKE(snap->f_char, snap->max_f * F_LIT_MAX, byte);
+
+    for (i = 0; i < snap->max_r; i++)
+    {
+        monster_race *r_ptr = &r_info[i];
+        snap->r_attr[i] = r_ptr->x_attr;
+        snap->r_char[i] = r_ptr->x_char;
+    }
+    for (i = 0; i < snap->max_k; i++)
+    {
+        object_kind *k_ptr = &k_info[i];
+        snap->k_attr[i] = k_ptr->x_attr;
+        snap->k_char[i] = k_ptr->x_char;
+    }
+    for (i = 0; i < snap->max_f; i++)
+    {
+        feature_type *f_ptr = &f_info[i];
+        int lit;
+        for (lit = 0; lit < F_LIT_MAX; lit++)
+        {
+            int idx = i * F_LIT_MAX + lit;
+            snap->f_attr[idx] = f_ptr->x_attr[lit];
+            snap->f_char[idx] = f_ptr->x_char[lit];
+        }
+    }
+}
+
+static void visuals_snapshot_restore(const visuals_snapshot_t *snap)
+{
+    int i;
+    int max_r = MIN(max_r_idx, snap->max_r);
+    int max_k = MIN(max_k_idx, snap->max_k);
+    int max_f = MIN(max_f_idx, snap->max_f);
+
+    for (i = 0; i < max_r; i++)
+    {
+        monster_race *r_ptr = &r_info[i];
+        r_ptr->x_attr = snap->r_attr[i];
+        r_ptr->x_char = snap->r_char[i];
+    }
+    for (i = 0; i < max_k; i++)
+    {
+        object_kind *k_ptr = &k_info[i];
+        k_ptr->x_attr = snap->k_attr[i];
+        k_ptr->x_char = snap->k_char[i];
+    }
+    for (i = 0; i < max_f; i++)
+    {
+        feature_type *f_ptr = &f_info[i];
+        int lit;
+        for (lit = 0; lit < F_LIT_MAX; lit++)
+        {
+            int idx = i * F_LIT_MAX + lit;
+            f_ptr->x_attr[lit] = snap->f_attr[idx];
+            f_ptr->x_char[lit] = snap->f_char[idx];
+        }
+    }
+}
+
+static void visuals_snapshot_free(visuals_snapshot_t *snap)
+{
+    C_KILL(snap->r_attr, snap->max_r, byte);
+    C_KILL(snap->r_char, snap->max_r, byte);
+    C_KILL(snap->k_attr, snap->max_k, byte);
+    C_KILL(snap->k_char, snap->max_k, byte);
+    C_KILL(snap->f_attr, snap->max_f * F_LIT_MAX, byte);
+    C_KILL(snap->f_char, snap->max_f * F_LIT_MAX, byte);
 }
 
 static void do_cmd_knowledge_monsters(bool *need_redraw, bool visual_only, int direct_r_idx);
@@ -2533,6 +6116,8 @@ void do_cmd_visuals(void)
     char tmp[160];
     char buf[1024];
     bool need_redraw = FALSE;
+    bool visuals_changed = FALSE;
+    visuals_snapshot_t snapshot;
     const char *empty_symbol = "<< ? >>";
 
     if (use_bigtile) empty_symbol = "<< ?? >>";
@@ -2542,6 +6127,7 @@ void do_cmd_visuals(void)
 
     /* Save the screen */
     screen_save();
+    visuals_snapshot_init(&snapshot);
 
     /* Interact until done */
     while (1)
@@ -2578,6 +6164,7 @@ void do_cmd_visuals(void)
             (void)process_pref_file(tmp);
 
             need_redraw = TRUE;
+            visuals_changed = TRUE;
             break;
 
 #ifdef ALLOW_VISUALS
@@ -2832,12 +6419,14 @@ void do_cmd_visuals(void)
                     (void)cmd_visuals_aux(i, &t, 256);
                     r_ptr->x_attr = (byte)t;
                     need_redraw = TRUE;
+                    visuals_changed = TRUE;
                     break;
                 case 'c':
                     t = (int)r_ptr->x_char;
                     (void)cmd_visuals_aux(i, &t, 256);
                     r_ptr->x_char = (byte)t;
                     need_redraw = TRUE;
+                    visuals_changed = TRUE;
                     break;
                 case 'v':
                     do_cmd_knowledge_monsters(&need_redraw, TRUE, r);
@@ -2926,12 +6515,14 @@ void do_cmd_visuals(void)
                     (void)cmd_visuals_aux(i, &t, 256);
                     k_ptr->x_attr = (byte)t;
                     need_redraw = TRUE;
+                    visuals_changed = TRUE;
                     break;
                 case 'c':
                     t = (int)k_ptr->x_char;
                     (void)cmd_visuals_aux(i, &t, 256);
                     k_ptr->x_char = (byte)t;
                     need_redraw = TRUE;
+                    visuals_changed = TRUE;
                     break;
                 case 'v':
                     do_cmd_knowledge_objects(&need_redraw, TRUE, k);
@@ -3023,12 +6614,14 @@ void do_cmd_visuals(void)
                     (void)cmd_visuals_aux(i, &t, 256);
                     f_ptr->x_attr[lighting_level] = (byte)t;
                     need_redraw = TRUE;
+                    visuals_changed = TRUE;
                     break;
                 case 'c':
                     t = (int)f_ptr->x_char[lighting_level];
                     (void)cmd_visuals_aux(i, &t, 256);
                     f_ptr->x_char[lighting_level] = (byte)t;
                     need_redraw = TRUE;
+                    visuals_changed = TRUE;
                     break;
                 case 'l':
                     (void)cmd_visuals_aux(i, &lighting_level, F_LIT_MAX);
@@ -3036,6 +6629,7 @@ void do_cmd_visuals(void)
                 case 'd':
                     apply_default_feat_lighting(f_ptr->x_attr, f_ptr->x_char);
                     need_redraw = TRUE;
+                    visuals_changed = TRUE;
                     break;
                 case 'v':
                     do_cmd_knowledge_features(&need_redraw, TRUE, f, &lighting_level);
@@ -3080,6 +6674,19 @@ void do_cmd_visuals(void)
             msg_print("Visual attr/char tables reset.");
 
             need_redraw = TRUE;
+            visuals_changed = TRUE;
+            break;
+
+        case 'L':
+        case 'l':
+            config_visuals_load();
+            need_redraw = TRUE;
+            visuals_changed = TRUE;
+            break;
+
+        case 'S':
+        case 's':
+            config_visuals_save();
             break;
 
         /* Unknown option */
@@ -3094,6 +6701,34 @@ void do_cmd_visuals(void)
 
     /* Restore the screen */
     screen_load();
+
+    if (visuals_changed)
+    {
+        while (1)
+        {
+            int ch;
+            prt("Save visual changes to Current Settings? (y/n/r)", 0, 0);
+            ch = inkey();
+            if (ch == 'y' || ch == 'Y')
+            {
+                config_save_current_visuals();
+                msg_print("Saved to Current Settings.");
+                break;
+            }
+            if (ch == 'r' || ch == 'R')
+            {
+                visuals_snapshot_restore(&snapshot);
+                need_redraw = TRUE;
+                msg_print("Reverted visual changes.");
+                break;
+            }
+            if (ch == 'n' || ch == 'N' || ch == ESCAPE)
+                break;
+            bell();
+        }
+    }
+
+    visuals_snapshot_free(&snapshot);
 
     if (need_redraw) do_cmd_redraw();
 }

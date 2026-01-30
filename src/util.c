@@ -1575,6 +1575,25 @@ void ascii_to_text(char *buf, cptr str)
  */
 static bool macro__use[256];
 
+void macro_clear_all(void)
+{
+    int i;
+
+    for (i = 0; i < macro__num; i++)
+    {
+        z_string_free(macro__pat[i]);
+        z_string_free(macro__act[i]);
+        macro__pat[i] = NULL;
+        macro__act[i] = NULL;
+        if (macro__cmd) macro__cmd[i] = FALSE;
+    }
+
+    macro__num = 0;
+
+    for (i = 0; i < 256; i++)
+        macro__use[i] = FALSE;
+}
+
 
 /*
  * Find the macro (if any) which exactly matches the given pattern

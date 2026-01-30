@@ -630,6 +630,100 @@ errr process_pref_file_command(char *buf)
         break;
     }
 
+    /* Process "O:<name>:<num>" -- set numeric option */
+    case 'O':
+        if (tokenize(buf + 2, 2, zz, TOKENIZE_CHECKQUOTE) == 2)
+        {
+            int val = (int)strtol(zz[1], NULL, 0);
+
+            if (streq(zz[0], "delay_factor"))
+            {
+                delay_factor = (byte)MAX(0, MIN(9, val));
+                return 0;
+            }
+            if (streq(zz[0], "hitpoint_warn"))
+            {
+                hitpoint_warn = (byte)MAX(0, MIN(9, val));
+                return 0;
+            }
+            if (streq(zz[0], "mana_warn"))
+            {
+                mana_warn = (byte)MAX(0, MIN(9, val));
+                return 0;
+            }
+            if (streq(zz[0], "autosave_l"))
+            {
+                autosave_l = (val != 0);
+                return 0;
+            }
+            if (streq(zz[0], "autosave_t"))
+            {
+                autosave_t = (val != 0);
+                return 0;
+            }
+            if (streq(zz[0], "autosave_freq"))
+            {
+                if (val < 0) val = 0;
+                autosave_freq = (s16b)val;
+                return 0;
+            }
+            if (streq(zz[0], "random_artifact_pct"))
+            {
+                random_artifact_pct = (byte)MAX(0, MIN(100, val));
+                random_artifacts = (random_artifact_pct > 0);
+                return 0;
+            }
+            if (streq(zz[0], "reduce_uniques_pct"))
+            {
+                reduce_uniques_pct = (byte)MAX(0, MIN(100, val));
+                reduce_uniques = (reduce_uniques_pct > 0);
+                return 0;
+            }
+            if (streq(zz[0], "object_list_width"))
+            {
+                int maksi = MAX(50, Term->wid - 15);
+                maksi &= ~(0x01);
+                object_list_width = (byte)MAX(24, MIN(maksi, val));
+                return 0;
+            }
+            if (streq(zz[0], "monster_list_width"))
+            {
+                int maksi = MAX(50, Term->wid - 15);
+                maksi &= ~(0x01);
+                monster_list_width = (byte)MAX(24, MIN(maksi, val));
+                return 0;
+            }
+            if (streq(zz[0], "generate_empty"))
+            {
+                generate_empty = (byte)MAX(0, MIN(EMPTY_MAX - 1, val));
+                ironman_empty_levels = (generate_empty == EMPTY_ALWAYS);
+                return 0;
+            }
+            if (streq(zz[0], "small_level_type"))
+            {
+                small_level_type = (byte)MAX(0, MIN(SMALL_LVL_MAX, val));
+                always_small_levels = (small_level_type != 0);
+                return 0;
+            }
+            if (streq(zz[0], "pantheon_count"))
+            {
+                pantheon_count = MAX(1, MIN(PANTHEON_MAX - 1, val));
+                single_pantheon = (pantheon_count == 1);
+                return 0;
+            }
+            if (streq(zz[0], "game_pantheon"))
+            {
+                game_pantheon = MAX(0, MIN(PANTHEON_MAX - 1, val));
+                guaranteed_pantheon = (game_pantheon > 0);
+                return 0;
+            }
+
+            msg_format("Ignored invalid numeric option: %s", buf);
+            msg_print(NULL);
+            return 0;
+        }
+        break;
+
     /* Process "W:<term>:<active>:<flags>" -- window flag order */
     case 'W':
     {

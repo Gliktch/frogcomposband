@@ -2435,6 +2435,8 @@ static int _stats_ui(void)
         cmd = _inkey();
         if (cmd == '\r' && score <= _MAX_SCORE)
         {
+            if (!config_birth_settings_prompt())
+                continue;
             _birth_finalize();
             return UI_OK;
         }

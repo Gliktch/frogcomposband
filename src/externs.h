@@ -538,6 +538,9 @@ extern void window_flag_order_sync_all(void);
 extern bool window_flag_cycle_available(void);
 extern void window_flag_cycle(void);
 extern void window_flag_dump(void);
+extern void config_birth_save(void);
+extern void config_birth_load(bool allow_load);
+extern bool config_birth_settings_prompt(void);
 
 
 extern s16b alloc_kind_size;
@@ -1801,6 +1804,7 @@ extern void text_to_ascii(char *buf, cptr str);
 extern void ascii_to_text(char *buf, cptr str);
 extern errr macro_add(cptr pat, cptr act);
 extern sint macro_find_exact(cptr pat);
+extern void macro_clear_all(void);
 extern char inkey(void);
 extern cptr quark_str(s16b num);
 extern void quark_init(void);
