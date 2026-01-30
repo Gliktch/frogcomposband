@@ -464,7 +464,7 @@ install: ${SHARED_LIB} ${STATIC_LIB} ${STATIC_PIC_LIB} ${PLUGIN} ${PROG} install
 
 	for i in ${DATA}; do \
 		${INSTALL_STATUS}; \
-		if ${MKDIR_P} $$(dirname ${DESTDIR}${libdatadir}/${PACKAGE}/$$i) && ${INSTALL} -m 644 $$i ${DESTDIR}${libdatadir}/${PACKAGE}/$$i; then \
+		if ${MKDIR_P} $$(dirname ${DESTDIR}${libdatadir}/$$i) && ${INSTALL} -m 644 $$i ${DESTDIR}${libdatadir}/$$i; then \
 			${INSTALL_OK}; \
 		else \
 			${INSTALL_FAILED}; \
@@ -473,7 +473,7 @@ install: ${SHARED_LIB} ${STATIC_LIB} ${STATIC_PIC_LIB} ${PLUGIN} ${PROG} install
 
 	for i in ${CONFIG}; do \
 		${INSTALL_STATUS}; \
-		if ${MKDIR_P} $$(dirname ${DESTDIR}${configdir}/${PACKAGE}/$$i) && ${INSTALL} -m 644 $$i ${DESTDIR}${configdir}/${PACKAGE}/$$i; then \
+		if ${MKDIR_P} $$(dirname ${DESTDIR}${configdir}/$$i) && ${INSTALL} -m 644 $$i ${DESTDIR}${configdir}/$$i; then \
 			${INSTALL_OK}; \
 		else \
 			${INSTALL_FAILED}; \
@@ -570,28 +570,28 @@ uninstall: uninstall-extra
 	-rmdir ${DESTDIR}${plugindir} >/dev/null 2>&1
 
 	for i in ${DATA}; do \
-		if test -f ${DESTDIR}${libdatadir}/${PACKAGE}/$$i; then \
-			if rm -f ${DESTDIR}${libdatadir}/${PACKAGE}/$$i; then \
+		if test -f ${DESTDIR}${libdatadir}/$$i; then \
+			if rm -f ${DESTDIR}${libdatadir}/$$i; then \
 				${DELETE_OK}; \
 			else \
 				${DELETE_FAILED}; \
 			fi \
 		fi; \
-		rmdir "$$(dirname ${DESTDIR}${libdatadir}/${PACKAGE}/$$i)" >/dev/null 2>&1 || true; \
+		rmdir "$$(dirname ${DESTDIR}${libdatadir}/$$i)" >/dev/null 2>&1 || true; \
 	done
-	-rmdir ${DESTDIR}${libdatadir}/${PACKAGE} >/dev/null 2>&1
+	-rmdir ${DESTDIR}${libdatadir} >/dev/null 2>&1
 
 	for i in ${CONFIG}; do \
-		if test -f ${DESTDIR}${configdir}/${PACKAGE}/$$i; then \
-			if rm -f ${DESTDIR}${configdir}/${PACKAGE}/$$i; then \
+		if test -f ${DESTDIR}${configdir}/$$i; then \
+			if rm -f ${DESTDIR}${configdir}/$$i; then \
 				${DELETE_OK}; \
 			else \
 				${DELETE_FAILED}; \
 			fi \
 		fi; \
-		rmdir "$$(dirname ${DESTDIR}${configdir}/${PACKAGE}/$$i)" >/dev/null 2>&1 || true; \
+		rmdir "$$(dirname ${DESTDIR}${configdir}/$$i)" >/dev/null 2>&1 || true; \
 	done
-	-rmdir ${DESTDIR}${configdir}/${PACKAGE} >/dev/null 2>&1
+	-rmdir ${DESTDIR}${configdir} >/dev/null 2>&1
 
 	for i in ${PROG}; do \
 		if test -f ${DESTDIR}${bindir}/$$i; then \
