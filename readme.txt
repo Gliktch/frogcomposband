@@ -13,7 +13,8 @@
 
   Make sure you have the appropriate development packages installed.
   For example, you might run (Ubuntu or Mint):
-    $ sudo apt-get install autoconf gcc libc6-dev libncursesw5-dev libx11-dev
+    $ sudo apt-get install autoconf gcc libc6-dev libncurses-dev libx11-dev
+    (If that doesn't work on your distro, try libncursesw6-dev instead.)
 
   From the root of the source archive:
     $ sh autogen.sh
@@ -22,6 +23,8 @@
     $ make
 
   To install, you may need to elevate your credentials:
+    $ sudo make install
+    or
     $ su
     $ make install
     $ exit
@@ -30,6 +33,9 @@
     $ frogcomposband -- -n<number of windows>  ## for normal ASCII graphics (recommended)
   or
     $ frogcomposband -g -- -n<# of windows>    ## for 8x8 tile graphics 
+
+  You can override user/save paths without moving the full lib tree:
+    $ frogcomposband -du=~/Documents/Frog -ds=~/Documents/Frog/save -- -n1
 
   NOTE: some users have reported installation problems when compiling under
   Linux (and Mac). Running ./configure using the --with-no-install parameter
