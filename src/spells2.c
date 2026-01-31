@@ -1021,6 +1021,7 @@ bool detect_stairs(int range)
     /* Describe */
     if (detect)
     {
+        p_ptr->window |= PW_OBJECT_LIST;
         msg_print("You sense the presence of stairs!");
     }
 
@@ -1316,6 +1317,8 @@ bool detect_monsters_normal(int range)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
+
         /* Describe result */
         msg_print("You sense the presence of monsters!");
 
@@ -1381,6 +1384,8 @@ bool detect_monsters_invis(int range)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
+
         /* Describe result */
         msg_print("You sense the presence of invisible creatures!");
 
@@ -1441,6 +1446,8 @@ bool detect_monsters_evil(int range)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
+
         /* Describe result */
         msg_print("You sense the presence of evil creatures!");
 
@@ -1506,6 +1513,8 @@ bool detect_monsters_nonliving(int range)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
+
         /* Describe result */
         msg_print("You sense the presence of unnatural beings!");
 
@@ -1550,8 +1559,11 @@ bool detect_monsters_living(int range, cptr msg)
         }
     }
 
-    if (flag && msg)
-        msg_print(msg);
+    if (flag)
+    {
+        p_ptr->window |= PW_MONSTER_LIST;
+        if (msg) msg_print(msg);
+    }
 
     return flag;
 }
@@ -1606,6 +1618,7 @@ bool detect_monsters_magical(int range)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
         msg_print("You sense the presence of magical foes!");
     }
 
@@ -1666,6 +1679,8 @@ bool detect_monsters_mind(int range)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
+
         /* Describe result */
         msg_print("You sense the presence of someone's mind!");
 
@@ -1731,6 +1746,8 @@ bool detect_monsters_string(int range, cptr Match)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
+
         /* Describe result */
         msg_print("You sense the presence of monsters!");
 
@@ -1791,6 +1808,8 @@ bool detect_monsters_xxx(int range, u32b match_flag)
     /* Describe */
     if (flag)
     {
+        p_ptr->window |= PW_MONSTER_LIST;
+
         switch (match_flag)
         {
             case RF3_DEMON:

@@ -4762,18 +4762,6 @@ bool target_set(int mode)
                     /* Recenter the map around the player */
                     viewport_verify();
 
-                    /* Update stuff */
-                    p_ptr->update |= (PU_MONSTERS);
-
-                    /* Redraw map */
-                    p_ptr->redraw |= (PR_MAP);
-
-                    /* Window stuff */
-                    p_ptr->window |= (PW_OVERHEAD);
-
-                    /* Handle stuff */
-                    handle_stuff();
-
                     /* Recalculate interesting grids */
                     target_set_prepare(mode);
 
@@ -4994,18 +4982,6 @@ bool target_set(int mode)
                 {
                     /* Recenter the map around the player */
                     viewport_verify();
-
-                    /* Update stuff */
-                    p_ptr->update |= (PU_MONSTERS);
-
-                    /* Redraw map */
-                    p_ptr->redraw |= (PR_MAP);
-
-                    /* Window stuff */
-                    p_ptr->window |= (PW_OVERHEAD);
-
-                    /* Handle stuff */
-                    handle_stuff();
 
                     /* Recalculate interesting grids */
                     target_set_prepare(mode);
