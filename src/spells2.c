@@ -1318,10 +1318,10 @@ bool detect_monsters_normal(int range)
     if (flag)
     {
         p_ptr->window |= PW_MONSTER_LIST;
-
-        /* Describe result */
-        msg_print("You sense the presence of monsters!");
-
+        if (Match && Match[0] == '$' && !Match[1])
+            msg_print("You sense the presence of moving treasure!");
+        else
+            msg_print("You sense the presence of moving objects!");
     }
 
     /* Result */
