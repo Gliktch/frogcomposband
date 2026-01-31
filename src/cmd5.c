@@ -69,6 +69,7 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
     bool        flag, redraw, okay;
     char        choice;
     magic_type  *s_ptr;
+    caster_info *caster_ptr = get_caster_info();
     char        out_val[160];
     cptr        p;
     rect_t      display = ui_menu_rect();
