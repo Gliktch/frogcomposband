@@ -72,7 +72,9 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
     char        out_val[160];
     cptr        p;
     rect_t      display = ui_menu_rect();
+    rect_t      list_display = display;
     int menu_line = (use_menu ? 1 : 0);
+    cptr        status_msg = NULL;
 
 #ifdef ALLOW_REPEAT /* TNB */
 
@@ -140,6 +142,15 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
     (void)strnfmt(out_val, 78, "(%^ss %c-%c, *=List, ESC=exit) %^s which %s? ",
         p, I2A(0), I2A(num - 1), prompt, p);
 
+    if (list_display.cy > 1)
+    {
+        list_display.y += 1;
+        list_display.cy -= 1;
+    }
+
+    if (display.cy > 0)
+        Term_erase(display.x, display.y, display.cx);
+
     /* Get a spell from the user */
 
     choice = ESCAPE;
@@ -186,7 +197,7 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
             }
             if (menu_line > num) menu_line -= num;
             /* Display a list of spells */
-            print_spells(menu_line, spells, num, display, use_realm);
+            print_spells(menu_line, spells, num, list_display, use_realm);
             if (ask) continue;
         }
         else
@@ -204,7 +215,7 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
                     screen_save();
 
                     /* Display a list of spells */
-                    print_spells(menu_line, spells, num, display, use_realm);
+                    print_spells(menu_line, spells, num, list_display, use_realm);
                 }
 
                 /* Hide the list */
@@ -249,6 +260,12 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
         {
             bell();
             msg_format("You may not %s that %s.", prompt, p);
+            status_msg = format("You may not %s that %s.", prompt, p);
+            if (display.cy > 0)
+            {
+                Term_erase(display.x, display.y, display.cx);
+                c_put_str(TERM_L_RED, status_msg, display.y, display.x);
+            }
             continue;
         }
 
