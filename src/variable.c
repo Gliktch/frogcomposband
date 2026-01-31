@@ -205,6 +205,7 @@ byte attack_spell_hack = ASH_USELESS_ATTACK;
 byte troika_spell_hack = 0;
 s16b vampirism_hack = 1000;
 byte spell_problem = 0;
+bool spell_action_attempted = FALSE;
 s16b run_count = 0;
 byte autopick_inkey_hack = 0;
 bool overworld_visit = FALSE;
@@ -360,6 +361,7 @@ bool easy_id;        /* Easy Identify */
 bool easy_lore;      /* Easy Monster Lore */
 bool empty_lore;     /* Always start with empty item lore */
 bool easy_damage;    /* Access wizard info about damage and monster health */
+bool easy_menus;     /* Forgiving menus */
 bool allow_spoilers;
 bool power_tele;     /* Use old-style, non-fuzzy telepathy */
 bool smart_learn;    /* Monsters learn from their mistakes (*) */

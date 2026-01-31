@@ -238,6 +238,7 @@ enum
 };
 extern byte troika_spell_hack;
 extern byte spell_problem;
+extern bool spell_action_attempted;
 extern s16b vampirism_hack;
 extern byte autopick_inkey_hack;
 extern bool overworld_visit;
@@ -392,6 +393,7 @@ extern bool easy_id;        /* Easy Identify */
 extern bool easy_lore;      /* Easy Monster Lore */
 extern bool empty_lore;     /* Always start with empty item lore */
 extern bool easy_damage;    /* Peek into damage and monster health */
+extern bool easy_menus;     /* Forgiving menus */
 extern bool allow_spoilers;
 extern bool power_tele;     /* Use old-style, non-fuzzy telepathy */
 extern bool smart_learn;    /* Monsters learn from their mistakes (*) */

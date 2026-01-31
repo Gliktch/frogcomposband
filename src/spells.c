@@ -994,6 +994,7 @@ void do_cmd_spell(void)
     bool poli = (p_ptr->pclass == CLASS_POLITICIAN);
     bool _old_inkey_xtra = inkey_xtra;
     spell_problem = 0;
+    spell_action_attempted = FALSE;
 
     inkey_xtra = TRUE;
 
@@ -1152,6 +1153,8 @@ void do_cmd_spell(void)
             p_ptr->csp -= spell->cost;
         }
 
+        spell_action_attempted = TRUE;
+
         /* Check for Failure */
         if (randint0(100) < spell->fail)
         {
@@ -1263,6 +1266,7 @@ byte do_cmd_power(void)
     int budget = p_ptr->chp;
     byte ongelma = 0;
     bool hp_only = (elemental_is_(ELEMENTAL_WATER));
+    bool action_attempted = FALSE;
 
     if (!fear_allow_magic()) ongelma |= PWR_AFRAID;
     if (p_ptr->confused) ongelma |= PWR_CONFUSED;
@@ -1285,6 +1289,7 @@ byte do_cmd_power(void)
              if (ongelma & PWR_AFRAID) msg_print("You are too scared!");
              else if (ongelma & PWR_CONFUSED) msg_print("You are too confused!");
              if (flush_failure) flush();
+             if (easy_menus) return (ongelma & ~PWR_AFRAID);
              return ongelma;
         }
     }
@@ -1305,14 +1310,18 @@ byte do_cmd_power(void)
         if (spell->level > p_ptr->lev)
         {
             msg_print("You can't use that power yet!");
+            if (easy_menus) return (ongelma & ~PWR_AFRAID);
             return ongelma;
         }
 
         if (spell->cost > budget)
         {
             msg_print("Using this power will kill you!  Why not rest a bit first?");
+            if (easy_menus) return (ongelma & ~PWR_AFRAID);
             return ongelma;
         }
+
+        action_attempted = TRUE;
 
         /* Check for Failure */
         if (randint0(100) < spell->fail)
@@ -1354,6 +1363,7 @@ byte do_cmd_power(void)
         p_ptr->redraw |= (PR_HP);
         p_ptr->window |= (PW_SPELL);
     }
+    if (easy_menus && !action_attempted) return (ongelma & ~PWR_AFRAID);
     return ongelma;
 }
 

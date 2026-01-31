@@ -2939,6 +2939,7 @@ s32b score_mult(void)
     if (p_ptr->personality == PERS_MUNCHKIN) return 1;
     if (!smart_learn) mult -= 1500;
     if (easy_id) mult -= 1000;
+    if (easy_menus) mult -= 250;
     if (power_tele) mult -= 500;
     if ((p_ptr->pclass == CLASS_BERSERKER) && ((p_ptr->prace == RACE_SPECTRE) || (p_ptr->start_race == RACE_SPECTRE) || (p_ptr->old_race1 & (1L << RACE_SPECTRE))))
         mult -= 2000;

@@ -9,6 +9,7 @@
 - Added ask.band compare token rendering and documented completion format in Project_Spec.md.
 - Fixed UI refresh issues: detection/object/monster list updates, dispel buff effects refresh, and target recenter visibility rerolls.
 - Adjusted mimic detection messaging to avoid duplicate monster presence lines.
+- Added easy_menus birth option and gated fear/menu handling and spell list UX improvements behind it.
 
 ## Decisions
 - Phase 0 reserved for build/install fixes.
