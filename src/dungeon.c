@@ -4010,11 +4010,15 @@ static void _dispatch_command(int old_now_turn)
                 }
                 if (spell_problem & PWR_AFRAID)
                 {
-                    msg_print("You tremble in fear!");
-                    if (energy_use < 100) energy_use = 100;
-                    if (p_ptr->pclass == CLASS_ALCHEMIST) energy_use = alchemist_infusion_energy_use();
+                    if (!easy_menus || spell_action_attempted)
+                    {
+                        msg_print("You tremble in fear!");
+                        if (energy_use < 100) energy_use = 100;
+                        if (p_ptr->pclass == CLASS_ALCHEMIST) energy_use = alchemist_infusion_energy_use();
+                    }
                 }
                 spell_problem = 0;
+                spell_action_attempted = FALSE;
             }
             break;
 

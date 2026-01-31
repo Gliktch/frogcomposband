@@ -205,6 +205,7 @@ byte attack_spell_hack = ASH_USELESS_ATTACK;
 byte troika_spell_hack = 0;
 s16b vampirism_hack = 1000;
 byte spell_problem = 0;
+bool spell_action_attempted = FALSE;
 s16b run_count = 0;
 byte autopick_inkey_hack = 0;
 bool overworld_visit = FALSE;

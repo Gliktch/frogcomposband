@@ -238,6 +238,7 @@ enum
 };
 extern byte troika_spell_hack;
 extern byte spell_problem;
+extern bool spell_action_attempted;
 extern s16b vampirism_hack;
 extern byte autopick_inkey_hack;
 extern bool overworld_visit;
