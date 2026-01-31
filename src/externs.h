@@ -392,6 +392,7 @@ extern bool easy_id;        /* Easy Identify */
 extern bool easy_lore;      /* Easy Monster Lore */
 extern bool empty_lore;     /* Always start with empty item lore */
 extern bool easy_damage;    /* Peek into damage and monster health */
+extern bool easy_menus;     /* Forgiving menus */
 extern bool allow_spoilers;
 extern bool power_tele;     /* Use old-style, non-fuzzy telepathy */
 extern bool smart_learn;    /* Monsters learn from their mistakes (*) */

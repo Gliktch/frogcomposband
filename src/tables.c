@@ -2415,6 +2415,9 @@ option_type option_info[] =
 	{ &easy_damage,			FALSE, OPT_PAGE_BIRTH, 6, 16,
 	"easy_damage",			"Easy monster health and damage information (*)" },
 
+	{ &easy_menus,			FALSE, OPT_PAGE_BIRTH, 6, 11,
+	"easy_menus",			"Forgiving menus - fear checks only on actions (*)" },
+
 	{ &allow_spoilers,		FALSE, OPT_PAGE_BIRTH, 6, 29,
 	"allow_spoilers",		"Allow spoilers" },
 	

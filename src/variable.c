@@ -360,6 +360,7 @@ bool easy_id;        /* Easy Identify */
 bool easy_lore;      /* Easy Monster Lore */
 bool empty_lore;     /* Always start with empty item lore */
 bool easy_damage;    /* Access wizard info about damage and monster health */
+bool easy_menus;     /* Forgiving menus */
 bool allow_spoilers;
 bool power_tele;     /* Use old-style, non-fuzzy telepathy */
 bool smart_learn;    /* Monsters learn from their mistakes (*) */
