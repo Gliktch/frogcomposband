@@ -270,30 +270,77 @@ static int get_spell(int *sn, cptr prompt, int sval, bool learned, int use_realm
             continue;
         }
 
+        if (!is_magic(use_realm))
+        {
+            s_ptr = &technic_info[use_realm - MIN_TECHNIC][spell];
+        }
+        else
+        {
+            s_ptr = &mp_ptr->info[use_realm - 1][spell];
+        }
+
+        if (use_realm == REALM_HISSATSU)
+            need_mana = s_ptr->smana;
+        else
+            need_mana = mod_need_mana(lawyer_hack(s_ptr, LAWYER_HACK_MANA), spell, use_realm);
+
+        if (easy_menus && learned && !browse)
+        {
+            bool hp_caster = (caster_ptr && (caster_ptr->options & CASTER_USE_HP));
+            bool uses_concentration = (caster_ptr && (caster_ptr->options & CASTER_USE_CONCENTRATION));
+            bool uses_gold = (caster_ptr && (caster_ptr->options & CASTER_USE_AU));
+
+            if (p_ptr->pclass == CLASS_NINJA_LAWYER && use_realm != REALM_LAW)
+                hp_caster = TRUE;
+
+            if (uses_concentration)
+            {
+                if (need_mana > p_ptr->concent)
+                {
+                    msg_print("You need to concentrate more to use this power.");
+                    status_msg = "You need to concentrate more to use this power.";
+                    if (display.cy > 0)
+                    {
+                        Term_erase(display.x, display.y, display.cx);
+                        c_put_str(TERM_L_RED, status_msg, display.y, display.x);
+                    }
+                    if (flush_failure) flush();
+                    continue;
+                }
+            }
+            else if (uses_gold)
+            {
+                if (need_mana > p_ptr->au)
+                {
+                    msg_print("You do not have enough gold to use this power.");
+                    status_msg = "You do not have enough gold to use this power.";
+                    if (display.cy > 0)
+                    {
+                        Term_erase(display.x, display.y, display.cx);
+                        c_put_str(TERM_L_RED, status_msg, display.y, display.x);
+                    }
+                    if (flush_failure) flush();
+                    continue;
+                }
+            }
+            else if (!hp_caster && need_mana > p_ptr->csp)
+            {
+                msg_format("You do not have enough mana to %s this %s.", prompt, p);
+                status_msg = format("You do not have enough mana to %s this %s.", prompt, p);
+                if (display.cy > 0)
+                {
+                    Term_erase(display.x, display.y, display.cx);
+                    c_put_str(TERM_L_RED, status_msg, display.y, display.x);
+                }
+                if (flush_failure) flush();
+                continue;
+            }
+        }
+
         /* Verify it */
         if (ask)
         {
             char tmp_val[160];
-
-            /* Access the spell */
-            if (!is_magic(use_realm))
-            {
-                s_ptr = &technic_info[use_realm - MIN_TECHNIC][spell];
-            }
-            else
-            {
-                s_ptr = &mp_ptr->info[use_realm - 1][spell];
-            }
-
-            /* Extract mana consumption rate */
-            if (use_realm == REALM_HISSATSU)
-            {
-                need_mana = s_ptr->smana;
-            }
-            else
-            {
-                need_mana = mod_need_mana(lawyer_hack(s_ptr, LAWYER_HACK_MANA), spell, use_realm);
-            }
 
             /* Prompt */
             (void)strnfmt(tmp_val, 78, "%^s %s (%d mana, %d%% fail)? ",
