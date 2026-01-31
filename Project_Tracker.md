@@ -10,6 +10,8 @@
 - Fix: Refresh [] lists properly on Detection — gliktch
 - Fix: Update buff display after Dispel Magic — gliktch
 - Fix: Avoid visibility rerolls on target recenter — gliktch
+- Fix: Detection rod sometimes doubles up messages — gliktch
+- Fix: Monster status letters wandering over screen — velo
 
 ## Phase 0: Build + install first
 
@@ -37,9 +39,7 @@
 - Add: Show 'Floor' tab from pressing i, not only from I — gliktch
 - Add: Show full activation names in Activation menu — gliktch
 - Fix: Artifact scroll should not destroy items — gliktch
-- Fix: Detection rod sometimes doubles up messages — gliktch
 - Fix: Magic eater fear check double-up — gliktch
-- Fix: Monster status letters wandering over screen — velo
 - Fix: Not all buildings in landmark list can be selected by letter — gliktch
 - Fix: Purple disciple being offered overlevelled spell choices after disconnect — gliktch
 - Fix: Remove/disable 'temporal files' prompt — gliktch
