@@ -8,6 +8,7 @@
 - Completed Phase 0 build/install fixes on build/install-improvements and updated ask.band entries to Completed.
 - Added ask.band compare token rendering and documented completion format in Project_Spec.md.
 - Fixed UI refresh issues: detection/object/monster list updates, dispel buff effects refresh, and target recenter visibility rerolls.
+- Adjusted mimic detection messaging to avoid duplicate monster presence lines.
 
 ## Decisions
 - Phase 0 reserved for build/install fixes.
