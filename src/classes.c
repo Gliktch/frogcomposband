@@ -43,7 +43,7 @@ int get_class_idx(void)
                 result = r_info[p_ptr->current_r_idx].body.class_idx;
                 break;
             }
-            /* vvv Fall Through vvv */
+            /* fall through */
         default:
         {
             race_t *race_ptr = get_race();

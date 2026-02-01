@@ -82,6 +82,7 @@ static void _banishing_mirror_spell(int cmd, variant *res)
             var_set_int(res, 50);
             break;
         }
+        /* fall through */
     default:
         default_spell(cmd, res);
         break;

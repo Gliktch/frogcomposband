@@ -697,7 +697,7 @@ static bool double_check_immunity(object_type * o_ptr)
                     has_pval = TRUE;
                     break;
                 }
-                /* vvvv FALL THRU vvvv */
+                /* fall through */
             case 3: case 4: case 5: case 6:
                 add_flag(o_ptr->flags, OF_SHOW_MODS);
                 o_ptr->to_h += 5 + randint1(10);
@@ -710,7 +710,7 @@ static bool double_check_immunity(object_type * o_ptr)
                     has_pval = TRUE;
                     break;
                 }
-                /* vvvv FALL THRU vvvv */
+                /* fall through */
             case 9: case 10:
                 add_flag(o_ptr->flags, OF_STR);
                 add_flag(o_ptr->flags, OF_DEX);
@@ -735,7 +735,7 @@ static bool double_check_immunity(object_type * o_ptr)
                     has_pval = TRUE;
                     break;
                 }
-                /* vvvv FALL THRU vvvv */
+                /* fall through */
             case 3: case 4: case 5: case 6:
                 add_flag(o_ptr->flags, OF_SHOW_MODS);
                 o_ptr->to_h += 5 + randint1(10);    /* These will get trimmed later ... */
@@ -773,6 +773,7 @@ static bool double_check_immunity(object_type * o_ptr)
                     has_pval = TRUE;
                     break;
                 }
+                /* fall through */
             case 2:
                 add_flag(o_ptr->flags, OF_SHOW_MODS);
                 o_ptr->to_h += 5 + randint1(10);    /* These will get trimmed later ... */
@@ -1418,15 +1419,16 @@ static void random_slay_aux(object_type *o_ptr)
         case 4:
             add_flag(o_ptr->flags, OF_SLAY_HUMAN);
             break;
-        case 5:
-            if (one_in_(5)) /* low level slay evil is rare ... */
-            {
-                add_flag(o_ptr->flags, OF_SLAY_EVIL);
+            case 5:
+                if (one_in_(5)) /* low level slay evil is rare ... */
+                {
+                    add_flag(o_ptr->flags, OF_SLAY_EVIL);
+                    break;
+                }
+                /* fall through */
+            case 6:
+                add_flag(o_ptr->flags, OF_SLAY_ORC);
                 break;
-            }
-        case 6:
-            add_flag(o_ptr->flags, OF_SLAY_ORC);
-            break;
         case 7:
         case 8:
             add_flag(o_ptr->flags, OF_SLAY_TROLL);
@@ -1605,6 +1607,7 @@ static void random_slay(object_type *o_ptr)
                     random_slay_aux(o_ptr);
                     break;
                 }
+                /* fall through */
             case 2:
             case 3:
                 add_flag(o_ptr->flags, OF_XTRA_MIGHT);
@@ -2695,6 +2698,7 @@ s32b create_artifact(object_type *o_ptr, u32b mode)
                     one_high_resistance(o_ptr);
                     break;
                 }
+                /* fall through */
             case 5:
                 if (one_in_(2))
                 {
@@ -2777,6 +2781,7 @@ s32b create_artifact(object_type *o_ptr, u32b mode)
                     one_high_resistance(o_ptr);
                     break;
                 }
+                /* fall through */
             case 5: case 6:
                 random_resistance(o_ptr);
                 break;
@@ -2859,6 +2864,7 @@ s32b create_artifact(object_type *o_ptr, u32b mode)
                         random_misc(o_ptr);
                         break;
                     }
+                    /* fall through */
                 case 5: case 6: case 7:
                     random_resistance(o_ptr);
                     break;

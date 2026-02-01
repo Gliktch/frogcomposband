@@ -1322,12 +1322,14 @@ int gf_affect_p(int who, int type, int dam, int flags)
                     which = RACE_SNOTLING;
                     break;
                 }
+                /* fall through */
             case 2:
                 if (p_ptr->prace != RACE_YEEK)
                 {
                     which = RACE_YEEK;
                     break;
                 }
+                /* fall through */
             case 3:
                 which = MIMIC_SMALL_KOBOLD;
                 break;
@@ -4748,6 +4750,7 @@ bool gf_affect_m(int who, mon_ptr mon, int type, int dam, int flags)
                     earthquake(ty, tx, 4 + randint0(4));
                     if (!one_in_(6)) break;
                 }
+                /* fall through */
                 case 3: case 4: case 5: case 6: case 7: case 8:
                 if (!count)
                 {
@@ -4757,6 +4760,7 @@ bool gf_affect_m(int who, mon_ptr mon, int type, int dam, int flags)
                     project(0, 8, ty,tx, dam, GF_MANA, curse_flg);
                     if (!one_in_(6)) break;
                 }
+                /* fall through */
                 case 9: case 10: case 11:
                 if (!count)
                 {
@@ -4766,17 +4770,21 @@ bool gf_affect_m(int who, mon_ptr mon, int type, int dam, int flags)
                     if (one_in_(13)) count += activate_hi_summon(ty, tx, TRUE);
                     if (!one_in_(6)) break;
                 }
+                /* fall through */
                 case 12: case 13: case 14: case 15: case 16:
                     msg_format("%^s feels a surge of energy!", m_name);
 
                     project(0, 7, ty, tx, 50, GF_DISINTEGRATE, curse_flg);
                     if (!one_in_(6)) break;
+                /* fall through */
                 case 17: case 18: case 19:
                     aggravate_monsters(0);
                     if (!one_in_(6)) break;
+                /* fall through */
                 case 20: case 21:
                     count += activate_hi_summon(ty, tx, TRUE);
                     if (!one_in_(6)) break;
+                /* fall through */
                 case 22: case 23: case 24: case 25: case 26:
                 {
                     bool pet = !one_in_(3);

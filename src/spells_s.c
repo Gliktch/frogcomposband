@@ -1612,6 +1612,7 @@ void teleport_spell(int cmd, variant *res)
             var_set_int(res, 30);
             break;
         }
+        /* fall through */
     default:
         default_spell(cmd, res);
         break;

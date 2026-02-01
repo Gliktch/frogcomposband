@@ -1660,8 +1660,8 @@ static errr _parse_room_grid_object(char **args, int arg_ct, room_grid_ptr grid,
                 return PARSE_ERROR_GENERIC;
             }
         }
-        /* vvvvvvvvvvvvv Fall Through vvvvvvvvvvvvv */
     }
+    /* fall through */
     case 1:
         if (streq(args[0], "*"))
         {
@@ -1827,7 +1827,7 @@ static errr _parse_room_grid_trap(char **args, int arg_ct, room_grid_ptr grid)
     case 2:
         if (sscanf(args[1], "%d%%", &n) == 1)
             grid->trap_pct = n;
-        /* vvvvvvvvv Fall Through vvvvvvvvvvvv */
+        /* fall through */
     case 1:
         if (streq(args[0], "*"))
         {
@@ -4199,7 +4199,9 @@ errr parse_r_info(char *buf, header *head)
             switch (num)
             {
             case 4: r_ptr->body.blows_calc.mult = atoi(zz[3]);
+                /* fall through */
             case 3: r_ptr->body.blows_calc.wgt = atoi(zz[2]);
+                /* fall through */
             case 2: r_ptr->body.blows_calc.max = atoi(zz[1]);
             }
         }

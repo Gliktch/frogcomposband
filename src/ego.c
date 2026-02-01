@@ -966,12 +966,14 @@ static void _create_ring_aux(object_type *o_ptr, int level, int power, int mode)
                     add_flag(o_ptr->flags, OF_FREE_ACT);
                     break;
                 }
+                /* fall through */
             case 3:
                 if (!have_flag(o_ptr->flags, OF_SEE_INVIS))
                 {
                     add_flag(o_ptr->flags, OF_SEE_INVIS);
                     break;
                 }
+                /* fall through */
             case 4:
                 if (one_in_(2))
                 {
@@ -980,6 +982,7 @@ static void _create_ring_aux(object_type *o_ptr, int level, int power, int mode)
                         one_low_esp(o_ptr);
                     break;
                 }
+                /* fall through */
             case 5:
                 if (one_in_(2))
                 {
@@ -990,6 +993,7 @@ static void _create_ring_aux(object_type *o_ptr, int level, int power, int mode)
                     }
                     break;
                 }
+                /* fall through */
             default:
                 o_ptr->to_a += randint1(10);
             }
@@ -1172,6 +1176,7 @@ static void _create_amulet_aux(object_type *o_ptr, int level, int power, int mod
                     add_flag(o_ptr->flags, OF_RES_BLIND);
                     break;
                 }
+                /* fall through */
             case 6:
                 if (abs(power) >= 2 && one_in_(15))
                 {
@@ -1241,6 +1246,7 @@ static void _create_amulet_aux(object_type *o_ptr, int level, int power, int mod
                     do { one_high_resistance(o_ptr); powers--; ct++; } while (one_in_(2 + ct));
                     break;
                 }
+                /* fall through */
             default:
                 add_flag(o_ptr->flags, OF_WIS);
                 if (!o_ptr->pval) o_ptr->pval = _jewelry_pval(5, level);
@@ -1280,6 +1286,7 @@ static void _create_amulet_aux(object_type *o_ptr, int level, int power, int mod
                     add_flag(o_ptr->flags, OF_TELEPATHY);
                     break;
                 }
+                /* fall through */
             case 6:
                 if (abs(power) >= 2 && one_in_(2) && level >= 50)
                 {
@@ -1287,6 +1294,7 @@ static void _create_amulet_aux(object_type *o_ptr, int level, int power, int mod
                     o_ptr->pval = _jewelry_pval(3, level);
                     break;
                 }
+                /* fall through */
             default:
                 add_flag(o_ptr->flags, OF_STEALTH);
             }
@@ -1531,6 +1539,7 @@ static void _create_amulet_aux(object_type *o_ptr, int level, int power, int mod
                     one_demon_resistance(o_ptr);
                     break;
                 }
+                /* fall through */
             default:
                 o_ptr->to_h += randint1(3);
                 o_ptr->to_d += randint1(5);

@@ -1506,6 +1506,7 @@ static void _loop(_ui_context_ptr context)
             case 'R': _reserve(context); break;
             case KTRL('A'):
                 if (p_ptr->wizard) _wizard_stock(context->shop);
+                /* fall through */
             case KTRL('S'):
                 if (p_ptr->wizard) inv_sort(context->shop->inv);
                 break;

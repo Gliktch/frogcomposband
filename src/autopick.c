@@ -4117,10 +4117,9 @@ static byte get_string_for_search(object_type **o_handle, cptr *search_strp)
 
             /* Get previous position */
             pos = i;
-
-            /* Fall through to 'Delete key' */
         }
 
+        /* fall through */
         case 0x7F:
         case KTRL('d'):
             /* Delete key */

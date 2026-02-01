@@ -249,6 +249,7 @@ static void _evasive_leap_spell(int cmd, variant *res)
             var_set_int(res, 30);
             break;
         }
+        /* fall through */
     default:
         strafing_spell(cmd, res);
         break;
@@ -576,6 +577,7 @@ static int _object_dam_type(object_type *o_ptr)
         }
     }
 
+    /* fall through */
     case EFFECT_CONFUSE_MONSTERS:
     case EFFECT_CONFUSING_LITE:
         return GF_CONFUSION;

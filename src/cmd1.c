@@ -2135,7 +2135,7 @@ static bool py_attack_aux(int y, int x, bool *fear, bool *mdeath, s16b hand, int
     case CLASS_WEAPONMASTER:
         if (!p_ptr->sneak_attack)
             break;
-        /* vvvvv FALL THRU vvvvvv */
+        /* fall through */
     case CLASS_ROGUE:
     case CLASS_NINJA_LAWYER:
     case CLASS_NINJA:

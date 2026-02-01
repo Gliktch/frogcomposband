@@ -4269,6 +4269,7 @@ bool activate_ty_curse(bool stop_ty, int *count)
                 earthquake(py, px, 5 + randint0(10));
                 if (!one_in_(6)) break;
             }
+            /* fall through */
         case 30: case 31:
             if (!(*count))
             {
@@ -4279,6 +4280,7 @@ bool activate_ty_curse(bool stop_ty, int *count)
                 take_hit(DAMAGE_NOESCAPE, dam, "released pure mana");
                 if (!one_in_(6)) break;
             }
+            /* fall through */
         case 32: case 33:
             if (!(*count))
             {
@@ -4288,6 +4290,7 @@ bool activate_ty_curse(bool stop_ty, int *count)
                 if (randint0(13)) (*count) += activate_hi_summon(py, px, FALSE);
                 if (!one_in_(6)) break;
             }
+            /* fall through */
         case 34:
             msg_print("You feel a surge of energy!");
 
@@ -4298,20 +4301,25 @@ bool activate_ty_curse(bool stop_ty, int *count)
                 take_hit(DAMAGE_NOESCAPE, 50, "surge of energy");
             }
             if (!one_in_(6)) break;
+            /* fall through */
         case 1: case 2: case 3: case 16: case 17:
             aggravate_monsters(0);
             if (!one_in_(6)) break;
+            /* fall through */
         case 4: case 5: case 6:
             (*count) += activate_hi_summon(py, px, FALSE);
             if (!one_in_(6)) break;
+            /* fall through */
         case 7: case 8: case 9: case 18:
             (*count) += summon_specific(0, py, px, dun_level, 0, (PM_ALLOW_GROUP | PM_ALLOW_UNIQUE | PM_NO_PET));
             if (!one_in_(6)) break;
+            /* fall through */
         case 10: case 11: case 12:
             msg_print("You feel your life draining away...");
 
             lose_exp(p_ptr->exp / 16);
             if (!one_in_(6)) break;
+            /* fall through */
         case 13: case 14: case 15: case 19: case 20:
             if (stop_ty || (p_ptr->free_act && (randint1(125) < p_ptr->skills.sav)) || (p_ptr->pclass == CLASS_BERSERKER))
             {
@@ -4331,9 +4339,11 @@ bool activate_ty_curse(bool stop_ty, int *count)
                 stop_ty = TRUE;
             }
             if (!one_in_(6)) break;
+            /* fall through */
         case 21: case 22: case 23:
             (void)do_dec_stat(randint0(6));
             if (!one_in_(6)) break;
+            /* fall through */
         case 24:
             if (!never_forget)
             {
@@ -4342,6 +4352,7 @@ bool activate_ty_curse(bool stop_ty, int *count)
                 lose_all_info();
                 if (!one_in_(6)) break;
             }
+            /* fall through */
         case 25:
             /*
              * Only summon Cyberdemons deep in the dungeon.
@@ -4353,6 +4364,7 @@ bool activate_ty_curse(bool stop_ty, int *count)
                 break;
             }
             if (!one_in_(6)) break;
+            /* fall through */
         default:
             while (i < MAX_STATS)
             {

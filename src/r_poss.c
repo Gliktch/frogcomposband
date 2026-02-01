@@ -467,6 +467,7 @@ void possessor_attack(point_t where, bool *fear, bool *mdeath, int mode)
                 {
                 case RBE_SHATTER:
                     if (dam > 23) delay_quake = TRUE;
+                    /* fall through */
                 case RBE_HURT:
                     dam = mon_damage_mod(foe, dam, FALSE);
                     if (dam > 0)
@@ -1484,4 +1485,3 @@ void possessor_on_load(savefile_ptr file)
 {
     _history_on_load(file);
 }
-

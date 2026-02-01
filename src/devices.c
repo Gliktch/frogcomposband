@@ -2439,9 +2439,12 @@ errr effect_parse(char *line, effect_t *effect) /* LITE_AREA:<Lvl>:<Timeout>:<Ex
     switch (num)
     {
     case 4: effect->extra = atoi(tokens[3]);
+        /* fall through */
     case 3: effect->cost = atoi(tokens[2]);
+        /* fall through */
     case 2: effect->power = atoi(tokens[1]);
             effect->difficulty = effect->power;
+        /* fall through */
     case 1:
         for (i = 0; ; i++)
         {
