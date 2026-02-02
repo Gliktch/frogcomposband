@@ -609,7 +609,7 @@ int mut_gain_choice(mut_pred pred)
             char buf2[1024];
             int idx = choices[i];
             mut_name(idx, buf2);
-            sprintf(buf, "You will gain %s. Are you sure?", buf2);
+            snprintf(buf, sizeof(buf), "You will gain %.200s. Are you sure?", buf2);
             if (get_check(buf))
             {
                 mut_gain(idx);

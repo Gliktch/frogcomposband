@@ -1557,7 +1557,7 @@ void init_angband(void)
         char why[1024];
 
         /* Message */
-        sprintf(why, "Cannot access the '%s' file!", buf);
+        snprintf(why, sizeof(why), "Cannot access file '%.1000s'!", buf);
 
 
         /* Crash and burn */

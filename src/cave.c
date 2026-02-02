@@ -1867,13 +1867,13 @@ static void display_shortened_item_name(object_type *o_ptr, int y)
     {
         char tmp[MAX_NLEN];
         object_desc(tmp, o_ptr, (OD_NO_FLAVOR | OD_OMIT_PREFIX | OD_NAME_ONLY));
-        sprintf(buf, "%dd%d %s", o_ptr->dd, o_ptr->ds, tmp);
+        snprintf(buf, sizeof(buf), "%dd%d %.200s", o_ptr->dd, o_ptr->ds, tmp);
     }
     else if (o_ptr->tval == TV_BOW && _is_dice_boosted(o_ptr))
     {
         char tmp[MAX_NLEN];
         object_desc(tmp, o_ptr, (OD_NO_FLAVOR | OD_OMIT_PREFIX | OD_NAME_ONLY));
-        sprintf(buf, "x%d.%2.2d %s", o_ptr->mult / 100, o_ptr->mult % 100, tmp);
+        snprintf(buf, sizeof(buf), "x%d.%2.2d %.200s", o_ptr->mult / 100, o_ptr->mult % 100, tmp);
     }
     else
         object_desc(buf, o_ptr, (OD_NO_FLAVOR | OD_OMIT_PREFIX | OD_NAME_ONLY));

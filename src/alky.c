@@ -398,11 +398,11 @@ void _use_infusion(object_type* o_ptr, int overdose)
 		char prompt[255];
 		char o_name[255];
 		object_desc(o_name, o_ptr, OD_COLOR_CODED | OD_NO_PLURAL | OD_OMIT_PREFIX);
-		sprintf(prompt, "Really use %s? <color:y>[y/n]</color>", o_name);
+		snprintf(prompt, sizeof(prompt), "Really use %.200s? <color:y>[y/n]</color>", o_name);
 		if (msg_prompt(prompt, "ny", PROMPT_DEFAULT) == 'n')
 			return;
 		else{
-			sprintf(prompt, "Really, REALLY use %s? <color:y>[y/n]</color>", o_name);
+			snprintf(prompt, sizeof(prompt), "Really, REALLY use %.200s? <color:y>[y/n]</color>", o_name);
 			if (msg_prompt(prompt, "ny", PROMPT_DEFAULT) == 'n') return;
 		}
 	}
@@ -496,7 +496,7 @@ static bool create_infusion(void)
 	{
 		char prompt[255];
 		object_desc(o_name, dest_ptr, OD_COLOR_CODED);
-		sprintf(prompt, "Really replace %s? <color:y>[y/n]</color>", o_name);
+		snprintf(prompt, sizeof(prompt), "Really replace %.200s? <color:y>[y/n]</color>", o_name);
 		if (msg_prompt(prompt, "ny", PROMPT_DEFAULT) == 'n')
 			return FALSE;
 	}
@@ -767,7 +767,7 @@ bool alchemist_break_down_aux(object_type *o_ptr, int ct){
 	if (_CHEM[tier] + cost > _MAX_CHEM){
 		char prompt[255];
 		object_desc(o_name, o_ptr, OD_OMIT_PREFIX);
-		sprintf(prompt, "Really break down %s? %s chemicals will be lost due to lack of room. <color:y>[y/n]</color>", o_name, _CHEM[tier] == _MAX_CHEM ? "All" : "Some of the");
+		snprintf(prompt, sizeof(prompt), "Really break down %.50s? %.50s chemicals will be lost due to lack of room. <color:y>[y/n]</color>", o_name, _CHEM[tier] == _MAX_CHEM ? "All" : "Some of the");
 		if (msg_prompt(prompt, "ny", PROMPT_DEFAULT) == 'n')
 			return FALSE;
 	}

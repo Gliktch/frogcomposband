@@ -492,12 +492,12 @@ static bool gain_magic(void)
     {
         char prompt[255];
         object_desc(o_name, dest_ptr, OD_COLOR_CODED);
-        sprintf(prompt, "Really replace %s? <color:y>[y/n]</color>", o_name);
+        snprintf(prompt, sizeof(prompt), "Really replace %.200s? <color:y>[y/n]</color>", o_name);
         if (msg_prompt(prompt, "ny", PROMPT_DEFAULT) == 'n')
             return FALSE;
         if (dest_ptr->inscription)
         {
-            sprintf(prompt, "Copy inscription from %s? <color:y>[y/n]</color>", o_name);
+            snprintf(prompt, sizeof(prompt), "Copy inscription from %.200s? <color:y>[y/n]</color>", o_name);
             if (msg_prompt(prompt, "ny", PROMPT_DEFAULT) == 'y') _auto_insc = dest_ptr->inscription;
         }
     }

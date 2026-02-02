@@ -42,7 +42,7 @@ void init_saved_floors(bool force)
         saved_floor_type *sf_ptr = &saved_floors[i];
 
         /* File name */
-        sprintf(floor_savefile, "%s.F%02d", savefile, i);
+        snprintf(floor_savefile, sizeof(floor_savefile), "%.1000s.F%02d", savefile, i);
 
         /* Grab permissions */
         safe_setuid_grab();
@@ -133,7 +133,7 @@ void clear_saved_floor_files(void)
         if (sf_ptr->floor_id == p_ptr->floor_id) continue;
 
         /* File name */
-        sprintf(floor_savefile, "%s.F%02d", savefile, i);
+        snprintf(floor_savefile, sizeof(floor_savefile), "%.1000s.F%02d", savefile, i);
 
         /* Grab permissions */
         safe_setuid_grab();
@@ -199,7 +199,7 @@ static void kill_saved_floor(saved_floor_type *sf_ptr)
     else 
     {
         /* File name */
-        sprintf(floor_savefile, "%s.F%02d", savefile, (int)sf_ptr->savefile_id);
+        snprintf(floor_savefile, sizeof(floor_savefile), "%.1000s.F%02d", savefile, (int)sf_ptr->savefile_id);
 
         /* Grab permissions */
         safe_setuid_grab();

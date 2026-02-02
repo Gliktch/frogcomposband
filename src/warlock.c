@@ -989,7 +989,7 @@ static bool _dragonrider_ai(mon_spell_cast_ptr cast)
             cast->mon2 = &m_list[target_who];
             monster_desc(tmp, cast->mon2, 0);
             tmp[0] = toupper(tmp[0]);
-            sprintf(cast->name2, "<color:o>%s</color>", tmp);
+            snprintf(cast->name2, sizeof(cast->name2), "<color:o>%.200s</color>", tmp);
         }
     }
     else
@@ -2187,4 +2187,3 @@ class_t *warlock_get_class(int psubclass)
 
     return &me;
 }
-

@@ -1913,7 +1913,7 @@ bool save_floor(saved_floor_type *sf_ptr, u32b mode)
 #endif
     }
 
-    sprintf(floor_savefile, "%s.F%02d", savefile, (int)sf_ptr->savefile_id);
+    snprintf(floor_savefile, sizeof(floor_savefile), "%.1000s.F%02d", savefile, (int)sf_ptr->savefile_id);
     file = savefile_open_write(floor_savefile);
     if (file)
     {

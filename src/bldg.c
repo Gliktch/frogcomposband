@@ -128,7 +128,7 @@ static void show_building(building_type* bldg)
     char tmp_str[80];
 
     Term_clear();
-    sprintf(tmp_str, "%s (%s) %35s", bldg->owner_name, bldg->owner_race, bldg->name);
+    snprintf(tmp_str, sizeof(tmp_str), "%.20s (%.20s) %35.35s", bldg->owner_name, bldg->owner_race, bldg->name);
     prt(tmp_str, 3, 1);
 
 
