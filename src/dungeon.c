@@ -5190,6 +5190,7 @@ static void process_player(void)
                         {
                             m_ptr->mflag2 &= ~(MFLAG2_SHOW);
                             repair_monsters = TRUE;
+                            p_ptr->window |= PW_MONSTER_LIST;
                         }
                         else
                         {
@@ -5198,6 +5199,7 @@ static void process_player(void)
                             update_mon(i, FALSE);
                             check_mon_health_redraw(i);
                             lite_spot(m_ptr->fy, m_ptr->fx);
+                            p_ptr->window |= PW_MONSTER_LIST;
                         }
                     }
                 }

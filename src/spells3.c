@@ -158,6 +158,8 @@ bool teleport_away(int m_idx, int dis, u32b mode)
     /* Redraw the new grid */
     lite_spot(ny, nx);
 
+    p_ptr->window |= PW_MONSTER_LIST;
+
     if (r_info[m_ptr->r_idx].flags7 & (RF7_LITE_MASK | RF7_DARK_MASK))
         p_ptr->update |= (PU_MON_LITE);
 
@@ -264,6 +266,8 @@ void teleport_monster_to(int m_idx, int ty, int tx, int power, u32b mode)
 
     /* Redraw the new grid */
     lite_spot(ny, nx);
+
+    p_ptr->window |= PW_MONSTER_LIST;
 
     if (r_info[m_ptr->r_idx].flags7 & (RF7_LITE_MASK | RF7_DARK_MASK))
         p_ptr->update |= (PU_MON_LITE);
