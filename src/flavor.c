@@ -1920,7 +1920,7 @@ void object_desc(char *buf, object_type *o_ptr, u32b mode)
     /* Bows get a special "damage string" */
     case TV_BOW:
     {
-        char tmp[10];
+        char tmp[16];
 
         if (obj_is_fake_bow(o_ptr)) break;
         if (!known) break;
@@ -1933,9 +1933,9 @@ void object_desc(char *buf, object_type *o_ptr, u32b mode)
             power += p_ptr->shooter_info.to_mult;
 
         if (power % 100)
-            sprintf(tmp, "x%d.%2.2d", power / 100, power % 100);
+            snprintf(tmp, sizeof(tmp), "x%d.%2.2d", power / 100, power % 100);
         else
-            sprintf(tmp, "x%d", power / 100);
+            snprintf(tmp, sizeof(tmp), "x%d", power / 100);
 
         /* Append a special "damage" string */
         t = object_desc_chr(t, ' ');

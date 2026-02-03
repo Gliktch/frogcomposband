@@ -6218,6 +6218,7 @@ void do_poly_self(void)
     if ((power > randint0(20)) && one_in_(3) && (p_ptr->prace != RACE_ANDROID) && (p_ptr->prace != RACE_WEREWOLF) && (!(get_race()->flags & RACE_NO_POLY)))
     {
         char effect_msg[80] = "";
+        char tmp_msg[80];
         int new_race, expfact, goalexpfact;
 
         /* Some form of racial polymorph... */
@@ -6262,18 +6263,8 @@ void do_poly_self(void)
             /* Deformities are discriminated against! */
             (void)dec_stat(A_CHR, randint1(6), TRUE);
 
-            if (effect_msg[0])
-            {
-                char tmp_msg[10];
-                sprintf(tmp_msg,"%s",effect_msg);
-                sprintf(effect_msg,"deformed %s",tmp_msg);
-
-            }
-            else
-            {
-                sprintf(effect_msg,"deformed ");
-
-            }
+            snprintf(tmp_msg, sizeof(tmp_msg), "%s", effect_msg);
+            snprintf(effect_msg, sizeof(effect_msg), "deformed %.20s", tmp_msg);
         }
 
         while ((power > randint0(20)) && one_in_(10))

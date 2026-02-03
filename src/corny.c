@@ -1206,7 +1206,7 @@ static void _policy_blurb(int i, int *rivi)
                     paikka += (strlen(tmp_val) + 2);
                     if (_my_policies[i].compensation > _allowable())
                     {
-                        sprintf(tmp_val, format("(Claimable: %d) ", _allowable()));
+                        snprintf(tmp_val, sizeof(tmp_val), "(Claimable: %d) ", _allowable());
                         c_prt(TERM_YELLOW, tmp_val, *rivi, paikka);
                         paikka += (strlen(tmp_val) + 2);
                     }

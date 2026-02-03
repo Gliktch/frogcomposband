@@ -846,7 +846,7 @@ static void autopick_entry_from_object(autopick_type *entry, object_type *o_ptr)
         char o_name[MAX_NLEN];
 
         object_desc(o_name, o_ptr, (OD_NO_FLAVOR | OD_OMIT_PREFIX | OD_NO_PLURAL | OD_NAME_ONLY));
-        sprintf(name_str, "^%s$", o_name);
+        snprintf(name_str, sizeof(name_str), "^%.200s$", o_name);
     }
 
     /* Register the name in lowercase */
@@ -3042,11 +3042,11 @@ static void describe_autopick(char *buff, autopick_type *entry)
     if (IS_FLG(FLG_MORE_DICE))
     {
         static char more_than_desc_str[] =
-            "maximum damage from dice is more than __";
+            "maximum damage from dice is more than ___";
         body_str = "weapons";
 
-        sprintf(more_than_desc_str + sizeof(more_than_desc_str) - 3,
-            "%d", entry->dice);
+        snprintf(more_than_desc_str + sizeof(more_than_desc_str) - 4,
+            4, "%d", entry->dice);
         whose_str[whose_n++] = more_than_desc_str;
     }
 
@@ -3054,10 +3054,10 @@ static void describe_autopick(char *buff, autopick_type *entry)
     if (IS_FLG(FLG_MORE_BONUS))
     {
         static char more_bonus_desc_str[] =
-            "magical bonus is larger than (+__)";
+            "magical bonus is larger than (+___)";
 
-        sprintf(more_bonus_desc_str + sizeof(more_bonus_desc_str) - 4,
-            "%d)", entry->bonus);
+        snprintf(more_bonus_desc_str + sizeof(more_bonus_desc_str) - 5,
+            5, "%d)", entry->bonus);
         whose_str[whose_n++] = more_bonus_desc_str;
     }
 

@@ -943,7 +943,7 @@ cptr process_pref_file_expr(char **sp, char *fp)
                 {
                     unsigned int paikka = strpos(" ", v);
                     if (!paikka) break;
-                    sprintf(tmp, v);
+                    my_strcpy(tmp, v, sizeof(tmp));
                     tmp[paikka - 1] = '-';
                     v = tmp;
                 }
@@ -1812,12 +1812,12 @@ static errr file_character(cptr name, bool no_msgs)
     if (fd >= 0)
     {
         char out_val[160];
-
         /* Close the file */
         (void)fd_close(fd);
 
         /* Build query */
-        (void)sprintf(out_val, "Replace existing file %s? ", buf);
+        (void)snprintf(out_val, sizeof(out_val), "Replace existing file %s? ",
+                       buf + (strlen(buf) > 100 ? strlen(buf) - 100 : 0));
 
 
         /* Ask */
@@ -2136,7 +2136,8 @@ bool show_file(bool show_version, cptr name, cptr what, int line, int mode)
     if (!fff)
     {
         /* Caption */
-        sprintf(caption, "Help file '%s'", name);
+        snprintf(caption, sizeof(caption), "Help file '%s'",
+                 name + (strlen(name) > 100 ? strlen(name) - 100 : 0));
 
 
         /* Build the filename */
@@ -2150,7 +2151,8 @@ bool show_file(bool show_version, cptr name, cptr what, int line, int mode)
     if (!fff)
     {
         /* Caption */
-        sprintf(caption, "Info file '%s'", name);
+        snprintf(caption, sizeof(caption), "Info file '%s'",
+                 name + (strlen(name) > 100 ? strlen(name) - 100 : 0));
 
 
         /* Build the filename */
@@ -2171,7 +2173,8 @@ bool show_file(bool show_version, cptr name, cptr what, int line, int mode)
                 path[i] = PATH_SEP[0];
 
         /* Caption */
-        sprintf(caption, "Info file '%s'", name);
+        snprintf(caption, sizeof(caption), "Info file '%s'",
+                 name + (strlen(name) > 100 ? strlen(name) - 100 : 0));
 
         /* Open the file */
         fff = my_fopen(path, "r");
@@ -2562,7 +2565,8 @@ bool show_file(bool show_version, cptr name, cptr what, int line, int mode)
                 break;
             }
 
-            sprintf(xtmp, "%s: %s", player_name, what ? what : caption);
+            snprintf(xtmp, sizeof(xtmp), "%.25s: %.50s",
+                     player_name, what ? what : caption);
             my_fputs(ffp, xtmp, 80);
             my_fputs(ffp, "\n", 80);
 
