@@ -3712,7 +3712,7 @@ static void calc_torch(void)
     if (p_ptr->old_lite != p_ptr->cur_lite)
     {
         p_ptr->update |= (PU_LITE | PU_MON_LITE | PU_MONSTERS);
-        p_ptr->redraw |= PR_EFFECTS;
+        p_ptr->redraw |= (PR_EFFECTS | PR_STATUS);
         p_ptr->old_lite = p_ptr->cur_lite;
         if ((p_ptr->cur_lite > 0) && (p_ptr->special_defense & NINJA_S_STEALTH))
             set_superstealth(FALSE);

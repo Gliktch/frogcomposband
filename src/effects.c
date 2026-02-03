@@ -764,6 +764,8 @@ void dispel_player(void)
         msg_print("Your hands stop glowing.");
     }
     interrupt_singing(TRUE);
+    p_ptr->redraw |= PR_EFFECTS;
+    handle_stuff();
 }
 
 
