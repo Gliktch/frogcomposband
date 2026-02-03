@@ -1230,7 +1230,9 @@ void _skills_get_flags(u32b flgs[OF_ARRAY_SIZE])
     switch (pts)
     {
     case 3: add_flag(flgs, OF_TELEPATHY);
+        /* fall through */
     case 2: add_flag(flgs, OF_LORE2);
+        /* fall through */
     case 1: add_flag(flgs, OF_SEE_INVIS);
     }
 

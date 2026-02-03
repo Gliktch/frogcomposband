@@ -4796,6 +4796,7 @@ bool gf_affect_m(int who, mon_ptr mon, int type, int dam, int flags)
                     count += summon_specific((pet ? -1 : 0), py, px, (pet ? p_ptr->lev*2/3+randint1(p_ptr->lev/2) : dun_level), 0, mode);
                     if (!one_in_(6)) break;
                 }
+                /* fall through */
                 default:
                 {
                     if (!count)

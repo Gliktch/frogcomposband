@@ -889,6 +889,7 @@ static void _mount_jump_spell(int cmd, variant *res)
             var_set_bool(res, FALSE);
             return;
         }
+        /* fall through */
     default:
         jump_spell(cmd, res);
         break;

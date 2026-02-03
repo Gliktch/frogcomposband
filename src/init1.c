@@ -5115,7 +5115,7 @@ static cptr process_dungeon_file_expr(char **sp, char *fp)
                 {
                     unsigned int paikka = strpos(" ", v);
                     if (!paikka) break;
-                    sprintf(tmp, v);
+                    my_strcpy(tmp, v, sizeof(tmp));
                     tmp[paikka - 1] = '-';
                     v = tmp;
                 }

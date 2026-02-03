@@ -1954,6 +1954,7 @@ bool mon_attack_mon(int m_idx, int t_idx)
                 case RBE_EAT_ITEM:
                 case RBE_EAT_GOLD:
                     if ((p_ptr->riding != m_idx) && one_in_(2)) blinked = TRUE;
+                    /* fall through */
                 case RBE_EAT_FOOD:
                 case RBE_EAT_LITE:
                 case RBE_LOSE_STR:

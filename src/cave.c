@@ -4892,7 +4892,8 @@ void hit_mon_trap(int y, int x, int m_idx)
                         }
                         break;
                     }
-                    /* vvv=== Fall Thru: No Trapdoors in the Arena or Fixed Town Quests */
+                    /* No Trapdoors in the Arena or Fixed Town Quests */
+                    /* fall through */
                 case 6: case 7: case 8: case 9: /* Arrow Trap */
                     if (m_ptr->ml)
                         msg_format("%^s is hit by an arrow.", m_name);
