@@ -4208,8 +4208,7 @@ static void _dispatch_command(int old_now_turn)
 
         case KTRL('V'):
         {
-            viewport_verify_aux(VIEWPORT_FORCE_CENTER);
-            redraw_hack = FALSE;
+            viewport_verify_no_monsters();
             break;
         }
 

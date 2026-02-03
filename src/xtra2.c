@@ -4771,25 +4771,15 @@ bool target_set(int mode)
                 case 'p':
                 {
                     /* Recenter the map around the player */
-                    viewport_verify();
-
-                    /* Update stuff */
-                    p_ptr->update |= (PU_MONSTERS);
-
-                    /* Redraw map */
-                    p_ptr->redraw |= (PR_MAP);
-
-                    /* Window stuff */
-                    p_ptr->window |= (PW_OVERHEAD);
-
-                    /* Handle stuff */
-                    handle_stuff();
+                    viewport_verify_no_monsters();
 
                     /* Recalculate interesting grids */
                     target_set_prepare(mode);
 
                     y = py;
                     x = px;
+                    flag = FALSE;
+                    break;
                 }
 
                 case 'o':
@@ -5004,25 +4994,15 @@ bool target_set(int mode)
                 case 'p':
                 {
                     /* Recenter the map around the player */
-                    viewport_verify();
-
-                    /* Update stuff */
-                    p_ptr->update |= (PU_MONSTERS);
-
-                    /* Redraw map */
-                    p_ptr->redraw |= (PR_MAP);
-
-                    /* Window stuff */
-                    p_ptr->window |= (PW_OVERHEAD);
-
-                    /* Handle stuff */
-                    handle_stuff();
+                    viewport_verify_no_monsters();
 
                     /* Recalculate interesting grids */
                     target_set_prepare(mode);
 
                     y = py;
                     x = px;
+                    flag = FALSE;
+                    break;
                 }
 
                 case 'o':
@@ -5758,19 +5738,7 @@ bool tgt_pt(int *x_ptr, int *y_ptr, int rng)
                     n = 0;
                     y = py;
                     x = px;
-                    viewport_verify();    /* Move cursor to player */
-
-                    /* Update stuff */
-                    p_ptr->update |= (PU_MONSTERS);
-
-                    /* Redraw map */
-                    p_ptr->redraw |= (PR_MAP);
-
-                    /* Window stuff */
-                    p_ptr->window |= (PW_OVERHEAD);
-
-                    /* Handle stuff */
-                    handle_stuff();
+                    viewport_verify_no_monsters();    /* Move cursor to player */
                 }
                 else    /* move cursor to next stair and change panel */
                 {
@@ -5857,19 +5825,7 @@ bool tgt_pt(int *x_ptr, int *y_ptr, int rng)
     msg_line_clear();
 
     /* Recenter the map around the player */
-    viewport_verify();
-
-    /* Update stuff */
-    p_ptr->update |= (PU_MONSTERS);
-
-    /* Redraw map */
-    p_ptr->redraw |= (PR_MAP);
-
-    /* Window stuff */
-    p_ptr->window |= (PW_OVERHEAD);
-
-    /* Handle stuff */
-    handle_stuff();
+    viewport_verify_no_monsters();
 
     *x_ptr = x;
     *y_ptr = y;

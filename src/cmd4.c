@@ -426,9 +426,12 @@ void do_cmd_redraw(void)
     update_playtime();
 
     /* Prevent spamming ^R to circumvent fuzzy detection */
-    redraw_hack = TRUE;
-    handle_stuff();
-    redraw_hack = FALSE;
+    {
+        redraw_hack = TRUE;
+        p_ptr->update &= ~PU_MONSTERS;
+        handle_stuff();
+        redraw_hack = FALSE;
+    }
 
     if (p_ptr->prace == RACE_ANDROID) android_calc_exp();
 
