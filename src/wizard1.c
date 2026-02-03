@@ -2295,6 +2295,13 @@ static int  _cmp_class_name(int left_idx, int right_idx)
     return strcmp(l->name, r->name);
 }
 
+static int _cmp_class_name_vec(const void *a, const void *b)
+{
+    int left_idx = (int)(intptr_t)a;
+    int right_idx = (int)(intptr_t)b;
+    return _cmp_class_name(left_idx, right_idx);
+}
+
 static void spoil_spells_by_class(void)
 {
     int i, realm_idx;
@@ -2307,7 +2314,7 @@ static void spoil_spells_by_class(void)
         vec_add_int(vec, i);
     }
 
-    vec_sort(vec, (vec_cmp_f)_cmp_class_name);
+    vec_sort(vec, _cmp_class_name_vec);
 
     for (i = 0; i < vec_length(vec); i++)
     {
@@ -2408,7 +2415,7 @@ static void _spoil_spells_by_realm_aux2(int realm_idx, int class1_idx)
             vec_add_int(vec, class_idx);
     }
 
-    vec_sort(vec, (vec_cmp_f)_cmp_class_name);
+    vec_sort(vec, _cmp_class_name_vec);
 
     while (1)
     {
@@ -2456,7 +2463,7 @@ static void _spoil_spells_by_realm_aux1(int realm_idx)
             vec_add_int(vec, class_idx);
     }
 
-    vec_sort(vec, (vec_cmp_f)_cmp_class_name);
+    vec_sort(vec, _cmp_class_name_vec);
 
     while (1)
     {

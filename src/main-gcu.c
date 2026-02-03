@@ -652,6 +652,8 @@ static errr Term_xtra_gcu_alive(int v)
    return (0);
 }
 
+#ifdef USE_SOUND
+
 /*
  * Check for existance of a file
  */
@@ -667,8 +669,6 @@ static bool check_file(cptr s)
 }
 
 
-
-#ifdef USE_SOUND
 
 /*
  * Initialize sound
@@ -1358,9 +1358,10 @@ static int _parse_size_list(cptr arg, int sizes[], int max)
 errr init_gcu(int argc, char *argv[])
 {
    int i;
-   char path[1024];
 
 #ifdef USE_SOUND
+
+   char path[1024];
 
    /* Build the "sound" path */
    path_build(path, sizeof(path), ANGBAND_DIR_XTRA, "sound");

@@ -3216,7 +3216,9 @@ void do_cmd_colors(void)
                 }
                 if (MAX_COLOR > 16)
                 {
-                    for (j = 0; j < MAX_COLOR - 16; j++)
+                    int extra = MAX_COLOR - 16;
+
+                    for (j = 0; j < extra; j++)
                     {
                         /* Exhibit this color */
                         Term_putstr(j*4, 21, -1, a, "###");

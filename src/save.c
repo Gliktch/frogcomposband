@@ -863,7 +863,7 @@ static void wr_extra(savefile_ptr file)
 
     for (i = 0; i < MAX_POWER_LABEL; i++)
     {
-        if (!power_labels[i]) savefile_write_byte(file, 0xFF);
+        if (!power_labels[i][0]) savefile_write_byte(file, 0xFF);
         else
         {
             savefile_write_byte(file, i);

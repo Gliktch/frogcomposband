@@ -2107,8 +2107,8 @@ static int _stock_base(shop_ptr shop)
 {
     if (shop->type->id == SHOP_GENERAL)
         return 10 - 2 + randint1(4);
-	if (shop->type->id == SHOP_SHROOMERY)
-		return 6 + randint1(4);
+    if (shop->type->id == SHOP_SHROOMERY)
+        return 6 + randint1(4);
     if ((shop->type->id == SHOP_WEAPON) && (p_ptr->lev < 12)) return 18 + randint1(5);
     return _STOCK_BASE - 4 + randint1(8);
 }

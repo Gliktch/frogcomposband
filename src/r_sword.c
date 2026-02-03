@@ -531,8 +531,8 @@ static void _calc_bonuses(void)
         p_ptr->esp_good = TRUE;
     if (_essences[OF_ESP_NONLIVING] >= 2)
         p_ptr->esp_nonliving = TRUE;
-	if (_essences[OF_ESP_LIVING] >= 2)
-		p_ptr->esp_living = TRUE;
+    if (_essences[OF_ESP_LIVING] >= 2)
+        p_ptr->esp_living = TRUE;
     if (_essences[OF_ESP_UNIQUE] >= 2)
         p_ptr->esp_unique = TRUE;
 
@@ -623,8 +623,8 @@ static void _get_flags(u32b flgs[OF_ARRAY_SIZE])
         add_flag(flgs, OF_ESP_GOOD);
     if (_essences[OF_ESP_NONLIVING] >= 2)
         add_flag(flgs, OF_ESP_NONLIVING);
-	if (_essences[OF_ESP_LIVING] >= 2)
-		add_flag(flgs, OF_ESP_LIVING);
+    if (_essences[OF_ESP_LIVING] >= 2)
+        add_flag(flgs, OF_ESP_LIVING);
     if (_essences[OF_ESP_UNIQUE] >= 2)
         add_flag(flgs, OF_ESP_UNIQUE);
     if (_essences[OF_ESP_DRAGON] >= 2)

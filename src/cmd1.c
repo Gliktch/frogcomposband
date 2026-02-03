@@ -2117,7 +2117,9 @@ static bool py_attack_aux(int y, int x, bool *fear, bool *mdeath, s16b hand, int
     }
 
     if ((personality_is_(PERS_SNEAKY)) && (MON_CSLEEP(m_ptr)) && (m_ptr->ml))
+    {
         sleep_hit = TRUE;
+    }
 
 	switch (p_ptr->pclass)
 	{
