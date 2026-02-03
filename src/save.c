@@ -1502,6 +1502,21 @@ static char *versio_nimi(int tavu, int keski)
 {
 	switch (keski)
 	{
+		case 2: {
+			switch (tavu)
+			{
+				case 0: return "sampyla";
+				case 1: return "pulla";
+				case 2: return "munkki";
+				case 3: return "viineri";
+				case 4: return "pitko";
+				case 5: return "kakku";
+				case 6: return "piirakka";
+				case 7: return "pasteija";
+				case 8: return "rinkeli";
+				default: return "sampyla";
+			}
+		}
 		case 0: {
 			switch (tavu)
 			{
