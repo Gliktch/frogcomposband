@@ -2318,34 +2318,66 @@ static void prt_mon_health_bar(int m_idx, int row, int col)
         if (easy_damage || p_ptr->wizard)
         {
             char buf[20];
-            sprintf(buf, "%3d%%", pct);
-            col += 2;
-            Term_putstr(col, row, strlen(buf), attr, buf);
-            col += strlen(buf) + 1;
-            if (MON_STUNNED(m_ptr))
-            {
-                sprintf(buf, "%d%%", MON_STUNNED(m_ptr));
-                Term_putstr(col, row, strlen(buf), TERM_L_BLUE, buf);
-                col += strlen(buf) + 1;
-            }
+            char lead = ' ';
+            char status_primary = ' ';
+            byte status_attr = TERM_WHITE;
+            int  stun = MON_STUNNED(m_ptr);
+
             if (m_idx == target_who)
-                Term_queue_char(col++, row, TERM_L_RED, '*', 0, 0);
-            if (m_idx == p_ptr->riding)
-                Term_queue_char(col++, row, TERM_L_BLUE, '@', 0, 0);
+                lead = '*';
+            else if (m_idx == p_ptr->riding)
+                lead = '@';
+
+            Term_queue_char(
+                col + 1,
+                row,
+                (lead == '*') ? TERM_L_RED : (lead == '@' ? TERM_L_BLUE : base_attr),
+                lead,
+                0,
+                0
+            );
+
+            if (pct >= 100)
+                sprintf(buf, "**%%");
+            else
+                sprintf(buf, "%2d%%", pct);
+            Term_putstr(col + 2, row, 3, attr, buf);
+
             if (MON_INVULNER(m_ptr))
-                Term_queue_char(col++, row, TERM_WHITE, 'I', 0, 0);
+                Term_queue_char(col + 5, row, TERM_WHITE, 'I', 0, 0);
+
+            if (stun >= 100)
+                sprintf(buf, "**");
+            else if (stun > 0)
+                sprintf(buf, "%2d", stun);
+            else
+                sprintf(buf, "  ");
+            Term_putstr(col + 6, row, 2, TERM_L_BLUE, buf);
+
             if (MON_PARALYZED(m_ptr))
-                Term_queue_char(col++, row, TERM_BLUE, 'P', 0, 0);
-            if (MON_CSLEEP(m_ptr))
-                Term_queue_char(col++, row, TERM_BLUE, 'Z', 0, 0); /* ZZZ */
+            {
+                status_primary = 'P';
+                status_attr = TERM_BLUE;
+            }
+            else if (MON_CSLEEP(m_ptr))
+            {
+                status_primary = 'Z';
+                status_attr = TERM_BLUE;
+            }
+            else if (monster_slow(m_ptr))
+            {
+                status_primary = 'S';
+                status_attr = TERM_L_DARK;
+            }
+
+            Term_queue_char(col + 8, row, status_attr, status_primary, 0, 0);
+
             if (MON_CONFUSED(m_ptr))
-                Term_queue_char(col++, row, TERM_UMBER, 'C', 0, 0);
+                Term_queue_char(col + 9, row, TERM_UMBER, 'C', 0, 0);
             if (MON_MONFEAR(m_ptr))
-                Term_queue_char(col++, row, TERM_VIOLET, 'F', 0, 0);
+                Term_queue_char(col + 10, row, TERM_VIOLET, 'F', 0, 0);
             if (MON_FAST(m_ptr))
-                Term_queue_char(col++, row, TERM_L_BLUE, 'H', 0, 0);
-            if (monster_slow(m_ptr))
-                Term_queue_char(col++, row, TERM_L_DARK, 'S', 0, 0);
+                Term_queue_char(col + 11, row, TERM_L_BLUE, '>', 0, 0);
         }
         else
         {
