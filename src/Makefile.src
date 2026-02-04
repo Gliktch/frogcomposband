@@ -14,6 +14,7 @@ HEADERS = \
     h-define.h h-type.h h-system.h h-config.h angband.h \
     z-config.h defines.h types.h externs.h \
     c-string.h c-vec.h \
+    manifest.h \
     z-term.h z-rand.h z-util.h z-virt.h z-form.h z-doc.h
 
 CFILES = c-string.o c-vec.o

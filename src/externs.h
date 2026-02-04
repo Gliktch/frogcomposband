@@ -1189,6 +1189,9 @@ extern errr init_buildings(void);
 extern s16b f_tag_to_index_in_init(cptr str);
 extern void init_angband(void);
 extern void display_news(void);
+#ifdef MANIFEST
+extern void display_manifest(void);
+#endif
 
 /* load.c */
 extern errr rd_savefile_new(void);
@@ -2076,6 +2079,7 @@ extern bool ui_xy_is_visible(int x, int y);
 #define VIEWPORT_FORCE_CENTER 0x01
 extern void viewport_verify(void);
 extern void viewport_verify_aux(u32b options);
+extern void viewport_verify_no_monsters(void);
 extern bool viewport_scroll(int dy, int dx);
 
 /* If you like, you should be able to alter the result of ui_map_rect() and

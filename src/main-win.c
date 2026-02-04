@@ -4640,7 +4640,11 @@ int FAR PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrevInst,
     check_for_save_file(lpCmdLine);
 
     Term_flush();
+#ifdef MANIFEST
+    display_manifest();
+#else
     display_news();
+#endif
     c_prt(TERM_YELLOW, "                 [Choose 'New' or 'Open' from the 'File' menu]", Term->hgt - 1, 0);
     Term_fresh();
 
@@ -4660,4 +4664,3 @@ int FAR PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrevInst,
 
 
 #endif /* WINDOWS */
-

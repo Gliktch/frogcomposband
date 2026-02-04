@@ -243,6 +243,8 @@ pip-log.txt
 /src/frogcomposband
 /frogcomposband
 /src/tags
+/src/manifest.c
+/src/manifest.o
 
 # Temporary (cache) files built during run-time
 *.raw

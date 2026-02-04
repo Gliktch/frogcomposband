@@ -16,6 +16,10 @@
 #include "randname.h"
 #include "z-doc.h"
 
+#ifdef MANIFEST
+#include "manifest.h"
+#endif
+
 #ifdef HAVE_STAT
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -1460,6 +1464,31 @@ void display_news(void)
         }
     }
 }
+
+#ifdef MANIFEST
+void display_manifest(void)
+{
+    int w, h;
+    doc_ptr doc;
+    cptr text = manifest_get();
+
+    Term_get_size(&w, &h);
+    doc = doc_alloc(w);
+    {
+        doc_style_t style = *doc_current_style(doc);
+        style.right = w;
+        doc_push_style(doc, &style);
+    }
+    if (text && *text)
+        doc_insert(doc, text);
+    else
+        doc_insert(doc, "+ manifest\n   * (empty)\n");
+    doc_pop_style(doc);
+    doc_display(doc, "Patch Manifest", 0);
+    doc_free(doc);
+    viewport_verify_no_monsters();
+}
+#endif
 
 /*
  * Hack -- main Angband initialization entry point

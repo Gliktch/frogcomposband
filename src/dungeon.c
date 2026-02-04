@@ -3518,6 +3518,12 @@ static void _dispatch_command(int old_now_turn)
         case ESCAPE:
             break;
 
+#ifdef MANIFEST
+        case '|':
+            display_manifest();
+            break;
+#endif
+
         /*** Wizard Commands ***/
 
         /* Toggle Wizard Mode */
@@ -6079,7 +6085,11 @@ void play_game(bool new_game)
     {
         /* On X11, you need to flush() before Term->hgt is accurate! */
         Term_flush();
+#ifdef MANIFEST
+        display_manifest();
+#else
         display_news();
+#endif
     }
 
     /* Hack -- turn off the cursor */

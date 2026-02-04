@@ -3621,6 +3621,17 @@ void viewport_verify(void)
     }
 }
 
+void viewport_verify_no_monsters(void)
+{
+    viewport_verify_aux(VIEWPORT_FORCE_CENTER);
+    if (redraw_hack)
+    {
+        p_ptr->update &= ~PU_MONSTERS;
+        handle_stuff();
+        redraw_hack = FALSE;
+    }
+}
+
 
 cptr mon_health_desc(monster_type *m_ptr)
 {
