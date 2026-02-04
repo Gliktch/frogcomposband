@@ -1,6 +1,9 @@
 MKPATH=mk/
 include $(MKPATH)buildsys.mk
 
+# Commit manifest automatically enabled on startup for development builds
+MANIFEST ?= 1
+
 SUBDIRS = src lib
 CLEAN = config.status config.log *.dll *.exe
 

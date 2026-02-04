@@ -22,6 +22,10 @@
     $ make clean
     $ make
 
+  Patch manifest support is enabled by default when git metadata is available.
+  To disable it, or when building without git:
+    $ make MANIFEST=0
+
   To install, you may need to elevate your credentials:
     $ sudo make install
     or

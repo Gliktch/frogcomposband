@@ -1468,11 +1468,10 @@ void display_news(void)
 #ifdef MANIFEST
 void display_manifest(void)
 {
-    int w, h;
+    int w = 150;
     doc_ptr doc;
     cptr text = manifest_get();
 
-    Term_get_size(&w, &h);
     doc = doc_alloc(w);
     {
         doc_style_t style = *doc_current_style(doc);
@@ -1486,6 +1485,9 @@ void display_manifest(void)
     doc_pop_style(doc);
     doc_display(doc, "Patch Manifest", 0);
     doc_free(doc);
+    redraw_hack = TRUE;
+    p_ptr->redraw |= PR_MAP;
+    p_ptr->window |= (PW_OVERHEAD | PW_DUNGEON);
     viewport_verify_no_monsters();
 }
 #endif

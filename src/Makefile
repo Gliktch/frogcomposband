@@ -14,10 +14,15 @@ endif
 
 CFLAGS += -I. -std=c99 -O0 -Wdeclaration-after-statement -fno-omit-frame-pointer
 
+HAS_GIT = $(shell test -d ../.git && command -v git >/dev/null 2>&1 && \
+	git -C .. rev-parse --is-inside-work-tree >/dev/null 2>&1 && echo yes)
+
 MANIFEST_ENABLED =
 ifneq ($(MANIFEST),)
+ifneq ($(HAS_GIT),)
 	CFLAGS += -DMANIFEST
 	MANIFEST_ENABLED = 1
+endif
 endif
 ifneq ($(findstring -DMANIFEST,$(CFLAGS)),)
 	MANIFEST_ENABLED = 1

@@ -8,48 +8,49 @@ tmp_file="$(mktemp)"
 trap 'rm -f "$tmp_file"' EXIT
 
 if command -v git >/dev/null 2>&1 && [ -d "$repo_root/.git" ]; then
-    head_branch="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
-    base_ref=""
-    if git -C "$repo_root" show-ref --quiet refs/remotes/origin/master; then
-        base_ref="origin/master"
+    base_ref="3d28f6b1"
+    if ! git -C "$repo_root" rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+        base_ref=""
     fi
 
-    branches_list="$(git -C "$repo_root" for-each-ref --format='%(refname:short)' refs/heads)"
-    had_branch=0
-    {
-        for branch in $branches_list; do
-            if git -C "$repo_root" merge-base --is-ancestor "$branch" HEAD 2>/dev/null; then
-                if [ -n "$base_ref" ]; then
-                    log="$(git -C "$repo_root" log --pretty=format:'%h - %s' --no-color "${base_ref}..${branch}")"
-                else
-                    log="$(git -C "$repo_root" log --pretty=format:'%h - %s' --no-color "${branch}")"
-                fi
-                if [ -n "$log" ]; then
-                    printf "+ %s\n" "$branch"
-                    printf "%s\n" "$log" | sed 's/^/   * /'
-                    had_branch=1
-                fi
-            fi
-        done
+    if git -C "$repo_root" rev-parse --verify origin/master >/dev/null 2>&1; then
+        have_origin=1
+    else
+        have_origin=0
+    fi
 
-        if [ "$had_branch" -eq 0 ]; then
-            printf "+ %s\n" "$head_branch"
-            if [ -n "$base_ref" ]; then
-                log="$(git -C "$repo_root" log --pretty=format:'%h - %s' --no-color "${base_ref}..HEAD")"
-                if [ -n "$log" ]; then
-                    printf "%s\n" "$log" | sed 's/^/   * /'
+    {
+        printf "Commits in this build:\n"
+        if [ -n "$base_ref" ]; then
+            log="$(git -C "$repo_root" log --pretty=format:'%h%x09%s' --no-color "${base_ref}..HEAD")"
+        else
+            log="$(git -C "$repo_root" log --pretty=format:'%h%x09%s' --no-color HEAD)"
+        fi
+        if [ -n "$log" ]; then
+            printf "%s\n" "$log" | while IFS="$(printf '\t')" read -r hash subject; do
+                if [ "$have_origin" -eq 1 ] && ! git -C "$repo_root" merge-base --is-ancestor "$hash" origin/master 2>/dev/null; then
+                    printf "   * <color:o>%s - %s</color>\n" "$hash" "$subject"
                 else
-                    printf "   * (no local commits)\n"
+                    printf "   * %s - %s\n" "$hash" "$subject"
                 fi
-            else
-                git -C "$repo_root" log --pretty=format:'%h - %s' --no-color HEAD | sed 's/^/   * /'
-            fi
+            done
+        else
+            printf "   * (no local commits)\n"
         fi
 
-        if [ -n "$base_ref" ]; then
-            base_hash="$(git -C "$repo_root" rev-parse --short "$base_ref" 2>/dev/null || true)"
-            if [ -n "$base_hash" ]; then
-                printf "+ base %s (%s)\n" "$base_ref" "$base_hash"
+        if [ "$have_origin" -eq 1 ]; then
+            printf "\nAdditional origin commits available:\n"
+            if [ -n "$base_ref" ]; then
+                log="$(git -C "$repo_root" log --pretty=format:'%h%x09%s' --no-color "${base_ref}..origin/master" ^HEAD)"
+            else
+                log="$(git -C "$repo_root" log --pretty=format:'%h%x09%s' --no-color origin/master ^HEAD)"
+            fi
+            if [ -n "$log" ]; then
+                printf "%s\n" "$log" | while IFS="$(printf '\t')" read -r hash subject; do
+                    printf "   * <color:y>%s - %s</color>\n" "$hash" "$subject"
+                done
+            else
+                printf "   * (none)\n"
             fi
         fi
     } > "$tmp_file"
