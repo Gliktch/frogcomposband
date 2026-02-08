@@ -944,7 +944,8 @@ bool set_blind(int v, bool do_dec)
     p_ptr->redraw |= (PR_MAP);
 
     /* Window stuff */
-    p_ptr->window |= (PW_OVERHEAD | PW_DUNGEON);
+    p_ptr->window |= (PW_OVERHEAD | PW_DUNGEON | PW_MONSTER_LIST);
+    if (!v) p_ptr->window |= PW_OBJECT_LIST;
 
     /* Handle stuff */
     handle_stuff();
@@ -1282,7 +1283,8 @@ bool set_image(int v, bool do_dec)
     p_ptr->update |= (PU_MONSTERS);
 
     /* Window stuff */
-    p_ptr->window |= (PW_OVERHEAD | PW_DUNGEON);
+    p_ptr->window |= (PW_OVERHEAD | PW_DUNGEON | PW_MONSTER_LIST);
+    if (!v) p_ptr->window |= PW_OBJECT_LIST;
 
     /* Handle stuff */
     handle_stuff();
@@ -3228,6 +3230,9 @@ bool set_tim_esp(int v, bool do_dec)
     /* Update the monsters */
     p_ptr->update |= (PU_MONSTERS);
 
+    /* Window stuff */
+    p_ptr->window |= PW_MONSTER_LIST;
+
     /* Handle stuff */
     handle_stuff();
 
@@ -3285,6 +3290,9 @@ bool set_tim_esp_magical(int v, bool do_dec)
 
     /* Update the monsters */
     p_ptr->update |= (PU_MONSTERS);
+
+    /* Window stuff */
+    p_ptr->window |= PW_MONSTER_LIST;
 
     /* Handle stuff */
     handle_stuff();
@@ -3350,6 +3358,9 @@ bool set_tim_invis(int v, bool do_dec)
     /* Update the monsters */
     p_ptr->update |= (PU_MONSTERS);
 
+    /* Window stuff */
+    p_ptr->window |= PW_MONSTER_LIST;
+
     /* Handle stuff */
     handle_stuff();
 
@@ -3413,6 +3424,9 @@ bool set_tim_infra(int v, bool do_dec)
 
     /* Update the monsters */
     p_ptr->update |= (PU_MONSTERS);
+
+    /* Window stuff */
+    p_ptr->window |= PW_MONSTER_LIST;
 
     /* Handle stuff */
     handle_stuff();
