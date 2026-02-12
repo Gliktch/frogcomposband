@@ -1915,8 +1915,14 @@ static void innate_attacks(s16b m_idx, bool *fear, bool *mdeath, int mode)
  */
 
 static int drain_left = 0;
+static int retaliation_drain_left = 0;
 bool melee_hack = FALSE;
 static bool fear_stop = FALSE;
+
+void reset_retaliation_drain_pool(void)
+{
+    retaliation_drain_left = _max_vampiric_drain();
+}
 
 static int calculate_dir(int sx, int sy, int tx, int ty)
 {
@@ -2038,6 +2044,7 @@ static bool py_attack_aux(int y, int x, bool *fear, bool *mdeath, s16b hand, int
     bool            drain_msg = TRUE;
     int             drain_result = 0, drain_heal = 0;
     bool            can_drain = FALSE;
+    int            *drain_pool = retaliation_hack ? &retaliation_drain_left : &drain_left;
     int             num_blow;
     bool            is_human;
     bool            is_lowlevel;
@@ -3316,14 +3323,14 @@ static bool py_attack_aux(int y, int x, bool *fear, bool *mdeath, s16b hand, int
 
                         if (mode == WEAPONMASTER_REAPING) drain_heal = (_reaper_lock ? 8 : 16);
 
-                        if (drain_left)
+                        if (*drain_pool)
                         {
-                            if (drain_heal < drain_left)
-                                drain_left -= drain_heal;
+                            if (drain_heal < *drain_pool)
+                                *drain_pool -= drain_heal;
                             else
                             {
-                                drain_heal = drain_left;
-                                drain_left = 0;
+                                drain_heal = *drain_pool;
+                                *drain_pool = 0;
                             }
 
                             if (drain_msg)

@@ -225,6 +225,8 @@ bool make_attack_normal(int m_idx)
     /* ...nor if friendly */
     if (!is_hostile(m_ptr)) return FALSE;
 
+    reset_retaliation_drain_pool();
+
     /* Extract the effective monster level */
     rlev = MAX(4, r_ptr->level);
     rlev = rlev * m_ptr->mpower / 1000;

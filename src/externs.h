@@ -1209,6 +1209,7 @@ extern int ac_melee_pct(int ac);
 /* melee2.c */
 extern bool retaliation_hack;
 extern int retaliation_count;
+extern void reset_retaliation_drain_pool(void);
 extern bool make_attack_normal(int m_idx);
 extern void process_monsters(void);
 extern bool set_monster_csleep(int m_idx, int v);
