@@ -229,10 +229,10 @@ void do_cmd_go_down(void)
             {
                 /* Create a way back ... maybe */
                 if ( p_ptr->enter_dungeon
+                  && max_dlv[target_dungeon] > 0
                   && down_num >= 20
                   && !wacky_rooms
                   && !(d_info[dungeon_type].flags1 & DF1_RANDOM)
-                  && !(d_info[dungeon_type].initial_guardian && !(dungeon_flags[dungeon_type] & DUNGEON_NO_GUARDIAN))
                   && one_in_(14) )
                 {
                     /* Hack:  No stair scum */
