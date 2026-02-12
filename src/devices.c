@@ -4480,6 +4480,8 @@ cptr do_effect(effect_t *effect, int mode, int boost)
             int num = randint1(3);
             int i;
             bool hostile = (one_in_(3)) ? TRUE : FALSE;
+            if (p_ptr->pclass == CLASS_PSION)
+                hostile = TRUE;
             for (i = 0; i < num; i++)
             {
                 if ((hostile) && (summon_specific(SUMMON_WHO_PLAYER, py, px, dun_level + 5, SUMMON_REPTILE, PM_NO_PET | PM_NO_KAGE | PM_ALLOW_GROUP)))
@@ -4566,7 +4568,12 @@ cptr do_effect(effect_t *effect, int mode, int boost)
         if (value) return format("%d", 1500);
         if (cast)
         {
-            if (summon_specific(SUMMON_WHO_PLAYER, py, px, dun_level, SUMMON_DRAGON, PM_FORCE_PET))
+            if (p_ptr->pclass == CLASS_PSION)
+            {
+                if (summon_named_creature(SUMMON_WHO_PLAYER, py, px, MON_DOOM_DRAKE, PM_NO_PET))
+                    device_noticed = TRUE;
+            }
+            else if (summon_specific(SUMMON_WHO_PLAYER, py, px, dun_level, SUMMON_DRAGON, PM_FORCE_PET))
                 device_noticed = TRUE;
         }
         break;
@@ -4630,7 +4637,15 @@ cptr do_effect(effect_t *effect, int mode, int boost)
         if (color) return format("%d", TERM_VIOLET);
         if (cast)
         {
-            if (summon_specific(SUMMON_WHO_PLAYER, py, px, dun_level, SUMMON_CYBER, PM_FORCE_PET))
+            if (p_ptr->pclass == CLASS_PSION)
+            {
+                if (summon_named_creature(SUMMON_WHO_PLAYER, py, px, MON_BARON_OF_HELL, PM_NO_PET))
+                {
+                    device_noticed = TRUE;
+                    msg_print("You're confronted by a sudden burst of infernal bleating!");
+                }
+            }
+            else if (summon_specific(SUMMON_WHO_PLAYER, py, px, dun_level, SUMMON_CYBER, PM_FORCE_PET))
                 device_noticed = TRUE;
         }
         break;
@@ -4641,7 +4656,12 @@ cptr do_effect(effect_t *effect, int mode, int boost)
         if (color) return format("%d", TERM_YELLOW);
         if (cast)
         {
-            if (summon_specific(SUMMON_WHO_PLAYER, py, px, dun_level, SUMMON_ANGEL, PM_FORCE_PET))
+            if (p_ptr->pclass == CLASS_PSION)
+            {
+                if (summon_named_creature(SUMMON_WHO_PLAYER, py, px, MON_ANGEL, PM_NO_PET))
+                    device_noticed = TRUE;
+            }
+            else if (summon_specific(SUMMON_WHO_PLAYER, py, px, dun_level, SUMMON_ANGEL, PM_FORCE_PET))
                 device_noticed = TRUE;
         }
         break;

@@ -4460,6 +4460,7 @@ extern int PlayerUID;
 #define MON_BLOODLETTER_KHORNE 523
 #define MON_EARTH_ELEMENTAL 525
 #define MON_AIR_ELEMENTAL   526
+#define MON_DOOM_DRAKE      527
 #define MON_MALICIOUS_LEPRECHAUN 529
 #define MON_EOG_GOLEM 530
 #define MON_DREAD         534
@@ -4497,6 +4498,7 @@ extern int PlayerUID;
 #define MON_BEHOLDER               603
 #define MON_SERAPH                 605
 #define MON_LOGE                   606
+#define MON_BARON_OF_HELL          609
 #define MON_MONASTIC_LICH 611
 #define MON_FIRE_VAMPIRE 613
 #define MON_SEVEN_HEADED_HYDRA 614
