@@ -37,6 +37,7 @@ struct _last_restock_s
     int turn;
     int level;
     int exp;
+    int kills;
 };
 typedef struct _last_restock_s _last_restock_t;
 
@@ -1274,8 +1275,15 @@ shop_ptr shop_load(savefile_ptr file)
     shop->last_restock.turn = savefile_read_s32b(file);
     shop->last_restock.level = savefile_read_s16b(file);
     shop->last_restock.exp = savefile_read_s32b(file);
+    shop->last_restock.kills = savefile_read_s32b(file);
 
-    guard = savefile_read_u32b(file);
+    if ((u32b)shop->last_restock.kills == 0xFEEDFEED)
+    {
+        guard = 0xFEEDFEED;
+        shop->last_restock.kills = 0;
+    }
+    else
+        guard = savefile_read_u32b(file);
     assert(guard == 0xFEEDFEED);
 
     return shop;
@@ -1299,6 +1307,7 @@ void shop_reset(shop_ptr shop)
     shop->last_restock.turn = 0;
     shop->last_restock.level = 0;
     shop->last_restock.exp = 0;
+    shop->last_restock.kills = 0;
 }
 
 void shop_save(shop_ptr shop, savefile_ptr file)
@@ -1309,6 +1318,7 @@ void shop_save(shop_ptr shop, savefile_ptr file)
     savefile_write_s32b(file, shop->last_restock.turn);
     savefile_write_s16b(file, shop->last_restock.level);
     savefile_write_s32b(file, shop->last_restock.exp);
+    savefile_write_s32b(file, shop->last_restock.kills);
     savefile_write_u32b(file, 0xFEEDFEED);
 }
 
@@ -2144,6 +2154,12 @@ static void _maintain(shop_ptr shop)
             {
                 allow_restock = FALSE;
             }
+            if (p_ptr->prace == RACE_ANDROID)
+            {
+                int kills = ct_kills();
+                if (kills < shop->last_restock.kills + 20)
+                    allow_restock = FALSE;
+            }
         }
     }
 
@@ -2277,6 +2293,7 @@ static int _restock(shop_ptr shop, int target, bool is_shuffle)
     shop->last_restock.turn = game_turn;
     shop->last_restock.level = p_ptr->max_plv;
     shop->last_restock.exp = p_ptr->max_exp;
+    shop->last_restock.kills = ct_kills();
     return ct;
 }
 
