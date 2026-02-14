@@ -816,7 +816,8 @@ static void rd_extra(savefile_ptr file)
     else p_ptr->lv_kills = savefile_read_s16b(file);
     if (savefile_is_older_than(file, 7, 1, 2, 2)) p_ptr->pet_lv_kills = 0;
     else p_ptr->pet_lv_kills = savefile_read_s16b(file);
-    for (i = 0; i < 16; i++) (void)savefile_read_s32b(file);
+    p_ptr->p_stat = (byte)savefile_read_s32b(file);
+    for (i = 0; i < 15; i++) (void)savefile_read_s32b(file);
     wipe_labels();
     if (!savefile_is_older_than(file, 7, 1, 0, 4))
     {

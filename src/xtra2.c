@@ -187,6 +187,8 @@ void gain_chosen_stat(void)
         if (get_check("Are you sure? ")) break;
     }
     do_inc_stat(choice - 'a');
+    if (p_ptr->p_stat)
+        p_ptr->p_stat--;
     screen_load();
 }
 
@@ -198,7 +200,6 @@ void gain_chosen_stat(void)
 void check_experience(void)
 {
     int old_lev = p_ptr->lev;
-    static bool level_inc_stat = FALSE;
 
     /* Hack -- lower limit */
     if (p_ptr->exp < 0) p_ptr->exp = 0;
@@ -248,11 +249,8 @@ void check_experience(void)
     while ((p_ptr->lev < PY_MAX_LEVEL) &&
            (p_ptr->exp >= exp_requirement(p_ptr->lev)))
     {
-        if (level_inc_stat) /* check for delays from weird stuff */
-        {
+        if (p_ptr->p_stat && !character_xtra) /* check for delays from weird stuff */
             gain_chosen_stat();
-            level_inc_stat = FALSE;
-        }
 
         p_ptr->lev++;
 
@@ -268,7 +266,8 @@ void check_experience(void)
             sound(SOUND_LEVEL);
             cmsg_format(TERM_L_GREEN, "Welcome to level %d.", p_ptr->lev);
 
-            if ((p_ptr->max_plv % 5) == 0) level_inc_stat = TRUE;
+            if ((p_ptr->max_plv % 5) == 0 && p_ptr->p_stat < 255)
+                p_ptr->p_stat++;
 
             if (class_ptr->gain_level != NULL)
             {
@@ -312,11 +311,8 @@ void check_experience(void)
 
         level_up = 0;
 
-        if (level_inc_stat)
-        {
+        if (p_ptr->p_stat && !character_xtra)
             gain_chosen_stat();
-            level_inc_stat = FALSE;
-        }
         p_ptr->update |= (PU_BONUS | PU_HP | PU_MANA | PU_SPELLS);
         p_ptr->redraw |= (PR_LEV);
         p_ptr->window |= (PW_SPELL);

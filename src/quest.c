@@ -242,7 +242,11 @@ void quest_complete(quest_ptr q, point_t p)
         }
 
         if (no_wilderness)
+        {
+            if (p_ptr->p_stat < 255)
+                p_ptr->p_stat++;
             gain_chosen_stat();
+        }
 
         q->status = QS_FINISHED;
     }
@@ -1284,6 +1288,8 @@ void _dungeon_boss_death(mon_ptr mon)
             : lookup_kind(TV_SCROLL, SV_SCROLL_ACQUIREMENT);
         object_type forge, *q_ptr;
 
+        if (p_ptr->p_stat < 255)
+            p_ptr->p_stat++;
         gain_chosen_stat();
         gain_fame(randint1(3));
 

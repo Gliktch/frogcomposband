@@ -858,7 +858,8 @@ static void wr_extra(savefile_ptr file)
     savefile_write_byte(file, p_ptr->py_summon_kills);
     savefile_write_s16b(file, p_ptr->lv_kills);
     savefile_write_s16b(file, p_ptr->pet_lv_kills);
-    for (i = 0; i < 16; i++)
+    savefile_write_s32b(file, p_ptr->p_stat);
+    for (i = 0; i < 15; i++)
         savefile_write_s32b(file, 0); /* Future use */
 
     for (i = 0; i < MAX_POWER_LABEL; i++)

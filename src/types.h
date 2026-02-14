@@ -1056,6 +1056,7 @@ struct player_type
     s16b clp;            /* Cur life pts (per mill) */
 
     s16b max_plv;        /* Max Player Level */
+    byte p_stat;         /* Pending stat point selections */
 
     s16b stat_max[6];    /* Current "maximal" stat values */
     s16b stat_max_max[6];    /* Maximal "maximal" stat values */
