@@ -6545,28 +6545,9 @@ void play_game(bool new_game)
         /* Accidental Death */
         if (p_ptr->playing && p_ptr->is_dead)
         {
-            if (p_ptr->inside_arena)
+            if (arena_death_recover())
             {
-                p_ptr->inside_arena = FALSE;
-                if (p_ptr->arena_number > MAX_ARENA_MONS)
-                    p_ptr->arena_number++;
-                else
-                    p_ptr->arena_number = -1 - p_ptr->arena_number;
-                p_ptr->is_dead = FALSE;
-                p_ptr->chp = 0;
-                p_ptr->chp_frac = 0;
-                p_ptr->exit_bldg = TRUE;
-                energy_use = 0;
-                p_ptr->energy_need = 0;
-                reset_tim_flags();
-
-                fame_on_failure();
-
-                /* Leave through the exit */
-                prepare_change_floor_mode(CFM_FIRST_FLOOR);
-
-                /* prepare next floor */
-                leave_floor();
+                /* Keep loop running to handle arena exit flow. */
             }
             else
             {

@@ -3487,6 +3487,7 @@ void close_game(void)
     /* Hack -- Character is now "icky" */
     character_icky = TRUE;
 
+    arena_death_recover();
 
     /* Handle death */
     if (p_ptr->is_dead)
@@ -3554,6 +3555,8 @@ void exit_game_panic(void)
 
     /* Hack -- turn off some things */
     disturb(1, 0);
+
+    arena_death_recover();
 
     /* Mega-Hack -- Delay death */
     if (p_ptr->chp < 0) p_ptr->is_dead = FALSE;

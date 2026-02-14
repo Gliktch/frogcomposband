@@ -3617,6 +3617,35 @@ void viewport_verify(void)
     }
 }
 
+bool arena_death_recover(void)
+{
+    if (!p_ptr->inside_arena) return FALSE;
+    if (!p_ptr->is_dead) return FALSE;
+
+    p_ptr->inside_arena = FALSE;
+    if (p_ptr->arena_number > MAX_ARENA_MONS)
+        p_ptr->arena_number++;
+    else
+        p_ptr->arena_number = -1 - p_ptr->arena_number;
+    p_ptr->is_dead = FALSE;
+    p_ptr->chp = 0;
+    p_ptr->chp_frac = 0;
+    p_ptr->exit_bldg = TRUE;
+    energy_use = 0;
+    p_ptr->energy_need = 0;
+    reset_tim_flags();
+
+    fame_on_failure();
+
+    /* Leave through the exit */
+    prepare_change_floor_mode(CFM_FIRST_FLOOR);
+
+    /* prepare next floor */
+    leave_floor();
+
+    return TRUE;
+}
+
 void viewport_verify_no_monsters(void)
 {
     viewport_verify_aux(VIEWPORT_FORCE_CENTER);
