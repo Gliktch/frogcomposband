@@ -1865,6 +1865,7 @@ extern void window_stuff(void);
 extern void handle_stuff(void);
 extern bool arena_death_recover(void);
 extern bool heavy_armor(void);
+extern bool battle_curse_boot(void);
 extern int  py_prorata_level(int amt);
 extern int  py_prorata_level_aux(int amt, int w1, int w2, int w3);
 extern int  big_num_round(int num, int sig_figs);

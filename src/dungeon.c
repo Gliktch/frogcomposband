@@ -2995,6 +2995,8 @@ static void process_world(void)
     /* Update dungeon feeling, and announce it if changed */
     update_dungeon_feeling();
 
+    if (battle_curse_boot()) return;
+
     /*** Check monster arena ***/
     if (p_ptr->inside_battle && !p_ptr->leaving)
     {

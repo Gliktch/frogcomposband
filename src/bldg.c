@@ -2130,6 +2130,36 @@ static void _recharge_player_items(void)
     }
 }
 
+static bool _battle_curse_blackout(void)
+{
+    int day, hour, min;
+
+    if (!ironman_nightmare) return FALSE;
+
+    extract_day_hour_min(&day, &hour, &min);
+    return (hour == 23 && min == 59);
+}
+
+bool battle_curse_boot(void)
+{
+    int day, hour, min;
+
+    if (!p_ptr->inside_battle) return FALSE;
+    if (!ironman_nightmare) return FALSE;
+
+    extract_day_hour_min(&day, &hour, &min);
+    if (!(hour == 23 && min == 59)) return FALSE;
+
+    msg_print("Your bad luck isn't welcome here, mate!");
+
+    prepare_change_floor_mode(CFM_SAVE_FLOORS | CFM_NO_RETURN);
+    p_ptr->leaving = TRUE;
+    p_ptr->inside_battle = FALSE;
+    energy_use = 0;
+
+    return TRUE;
+}
+
 /*
  * inn commands
  * Note that resting for the night was a perfect way to avoid player
@@ -4076,6 +4106,11 @@ static void bldg_process_command(building_type *bldg, int i)
         }
         break;
     case BACT_BATTLE:
+        if (_battle_curse_blackout())
+        {
+            msg_print("Your bad luck isn't welcome here, mate!");
+            return;
+        }
         kakutoujou();
         break;
     case BACT_TSUCHINOKO:
