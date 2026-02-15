@@ -569,6 +569,10 @@ static void _obj_identify_fully_aux(object_type *o_ptr)
 
     _obj_learn_curses(o_ptr);
     object_mitze(o_ptr, MITZE_ID);
+
+    /* Ensure *Sharpness* also carries the Sharpness flag for consistent inscriptions. */
+    if (have_flag(o_ptr->known_flags, OF_VORPAL2))
+        add_flag(o_ptr->known_flags, OF_VORPAL);
 }
 
 bool obj_is_identified(object_type *o_ptr)
@@ -892,4 +896,3 @@ void toggle_mon_obj_lists(void)
         }
     }
 }
-
