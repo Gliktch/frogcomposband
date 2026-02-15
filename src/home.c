@@ -190,6 +190,8 @@ static void _ui(_ui_context_ptr context)
         {
             switch (cmd)
             {
+            case '.':
+                break;
             case 'g': case 'b': case 'p':  _get(context); break;
             case 'd': case 's':  _drop(context); break;
             case 'x': _examine(context); break;
@@ -543,4 +545,3 @@ static void _remove(_ui_context_ptr context)
         _display(context);
     }
 }
-
