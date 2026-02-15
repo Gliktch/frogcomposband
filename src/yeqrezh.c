@@ -1191,7 +1191,7 @@ static spell_info *_yeqrezh_get_spells_learned(void)
     return spells;
 }
 
-static int _yeqrezh_get_spells_unlearned(power_info* spells, bool check_lv)
+static int _yeqrezh_get_spells_unlearned(power_info* spells, int max_level, bool check_lv)
 {
     int ct = 0, i, j;
     for (i = 0;; i++)
@@ -1203,7 +1203,7 @@ static int _yeqrezh_get_spells_unlearned(power_info* spells, bool check_lv)
         src = &_yeqrezh_spells[i];
 
         if (src->level < 0) break;
-        if ((check_lv) && (src->level > p_ptr->max_plv)) break;
+        if ((check_lv) && (src->level > max_level)) break;
         for (j = 0; j < _YEQREZH_PICKS; j++)
         {
             if ((j % 5) == 4) continue; /* muts, not spells */
@@ -1218,7 +1218,7 @@ static int _yeqrezh_get_spells_unlearned(power_info* spells, bool check_lv)
         dest = &spells[ct++];
         dest->spell.level = src->level;
         dest->spell.cost = src->cost;
-        dest->spell.fail = _my_calculate_fail_rate((check_lv ? p_ptr->max_plv : src->level), src->fail, p_ptr->stat_ind[A_INT]);
+        dest->spell.fail = _my_calculate_fail_rate((check_lv ? max_level : src->level), src->fail, p_ptr->stat_ind[A_INT]);
         dest->spell.fn = src->fn;
         dest->stat = A_NONE;
     }
@@ -1238,7 +1238,7 @@ static bool _yeqrezh_gain_spell(int slot)
     if (!character_dungeon) return FALSE;
     if (_yq_pick[slot] != _INVALID_SPELL) return FALSE;
     if (p_ptr->max_plv < taso) return FALSE;
-    ct = _yeqrezh_get_spells_unlearned(spells, valitse);
+    ct = _yeqrezh_get_spells_unlearned(spells, taso, valitse);
     if (!ct) return FALSE;
 
     if (!valitse)
