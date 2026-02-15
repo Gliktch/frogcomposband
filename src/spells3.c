@@ -2348,6 +2348,8 @@ bool artifact_scroll(void)
     obj_prompt_t prompt = {0};
     bool         okay = FALSE;
     char         o_name[MAX_NLEN];
+    object_type  remainder;
+    bool         has_remainder = FALSE;
 
     prompt.prompt = "Enchant which item?";
     prompt.error = "You have nothing to enchant.";
@@ -2395,9 +2397,10 @@ bool artifact_scroll(void)
     {
         if (prompt.obj->number > 1)
         {
-            msg_print("Not enough energy to enchant more than one object!");
-            msg_format("%d of your %s %s destroyed!",(prompt.obj->number)-1, o_name, (prompt.obj->number>2?"were":"was"));
-            prompt.obj->number = 1;
+            obj_ptr extra = obj_split(prompt.obj, prompt.obj->number - 1);
+            object_copy(&remainder, extra);
+            obj_free(extra);
+            has_remainder = TRUE;
         }
 
         if (object_is_mushroom(prompt.obj)) /* Hack for Snotlings ... */
@@ -2420,12 +2423,20 @@ bool artifact_scroll(void)
         /* Message */
         msg_print("The enchantment failed.");
 
+        if (has_remainder)
+            obj_combine(prompt.obj, &remainder, 0);
+
         return (FALSE);
     }
     else
     {
         object_origins(prompt.obj, ORIGIN_ART_CREATION);
         virtue_add(VIRTUE_ENCHANTMENT, 1);
+        if (has_remainder)
+        {
+            pack_carry(&remainder);
+            pack_overflow();
+        }
     }
 
     android_calc_exp();

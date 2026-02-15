@@ -307,6 +307,8 @@ void crafting_spell(int cmd, variant *res)
         obj_prompt_t prompt = {0};
         bool         okay = FALSE;
         char         o_name[MAX_NLEN];
+        object_type  remainder;
+        bool         has_remainder = FALSE;
 
         var_set_bool(res, FALSE);
 
@@ -329,10 +331,12 @@ void crafting_spell(int cmd, variant *res)
             return;
         }
 
-        if ((!object_is_ammo(prompt.obj)) && (prompt.obj->number > 1))
+        if (prompt.obj->number > 1)
         {
-            msg_print("You cannot use Crafting on more than one item at a time.");
-            return;
+            obj_ptr extra = obj_split(prompt.obj, prompt.obj->number - 1);
+            object_copy(&remainder, extra);
+            obj_free(extra);
+            has_remainder = TRUE;
         }
 
         if ((object_is_(prompt.obj, TV_SWORD, SV_POISON_NEEDLE)) ||
@@ -392,6 +396,8 @@ void crafting_spell(int cmd, variant *res)
             if (flush_failure) flush();
             msg_print("The enchantment failed.");
             if (one_in_(3)) virtue_add(VIRTUE_ENCHANTMENT, -1);
+            if (has_remainder)
+                obj_combine(prompt.obj, &remainder, 0);
         }
         else
         {
@@ -401,6 +407,11 @@ void crafting_spell(int cmd, variant *res)
             obj_identify_fully(prompt.obj);
             if (!prompt.obj->mitze_type) object_mitze(prompt.obj, MITZE_ID);
             obj_display(prompt.obj);
+            if (has_remainder)
+            {
+                pack_carry(&remainder);
+                pack_overflow();
+            }
             obj_release(prompt.obj, OBJ_RELEASE_ENCHANT);
         }
         var_set_bool(res, TRUE);
