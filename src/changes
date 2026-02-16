@@ -1,3 +1,114 @@
+Changes in FrogComposband 7.2.1 (pulla):
+
+Exploits
+* Psion summon farming fixed (thanks JarrodB).
+* Retaliation no longer bypasses vampiric leech caps.
+* Stair scumming with a live guardian fixed.
+* Android special-store scumming fixed.
+* Purple disciple no longer offered overleveled spell choices.
+
+UI and bugs
+* Subwindow lists refresh correctly after various detections and teleports.
+* Lists and status panels now refresh right away after curing hallucination,
+  getting dispelled, and multiple other ways of changing statuses/effects.
+* Stop monster status letters from roaming over the screen while in percentage
+  health bar mode (thanks velo).
+* Resume pending stat point selection after disconnect.
+* Some spell menu errors given a status line since before they weren't showing.
+* UI actions no longer reroll monster visibility.
+* "Unrecognized command" spam from PgUp/PgDn sending periods fixed.
+* Arena death recovery fixed so they don't turn into real deaths.
+* Fixed games being able to break by Nightmare midnight curse triggering while
+  inside the Monster Gambling map.
+
+Items and effects
+* Scroll enchanting no longer destroys stacked items.
+* *Sharpness* weapons always show both slays.
+* Artifacts destroyed by terrain/object wipes return to the pool.
+* TaepoDong now respects easy_mimics.
+* Magic eater duplicate fear check removed.
+
+Codebase cleanup
+* Fallthrough guards and missing breaks reviewed and fixed.
+* Prompt/display formatting hardened and bounds-checked.
+* All 114 compiler warnings cleaned up over a few days of reviewing.
+
+Build and install (thanks Sui and Linux nerds incl. kitten)
+* Updated ncurses detection to use ncursesw6-config and refreshed dependencies.
+* Install paths fixed to avoid duplicate package segments.
+* Install now creates data/save/user dirs to prevent permission failures.
+* Ensured configure is executable and other minor checks and fixes.
+* Documented -ds/-du for custom save/user locations.
+
+* Note: 7.2.0 (sampyla) was a development-only release.
+  All fixes in there have been brought into this release.
+
+-------------------------------------------------------
+
+Changes in FrogComposband 7.1.salmiak (nightly builds):
+
+* Added new monsters (Dokkaebi and Greater dokkaebi).
+
+* Added option to show damage ranges in monster info (thanks to JarrodB).
+
+* Documented samurai postures and improved timelord stasis power display.
+
+* Updated potion colors and fixed a double entry for Cyan.
+
+* Quality-of-life: improved always_pickup behavior, auto-identify arena
+rewards, expanded berserker destroy/no-pickup pickprefs, and improved
+recognition of old pickprefs.
+
+* Added support for the new isThrall parameter and updated Python bigsmov.
+
+* Fixed lagging icky light indicator (thanks to Rhukath for reporting).
+
+* Fixed bug with some object attributes not showing properly on shop
+inspection.
+
+* Fixed softlock and other issues caused by askfor() changes.
+
+* Fixed various issues with the kendo menu.
+
+* Fixed politician charming bugs.
+
+* Fixed bug with saving documents (thanks to Karkaroth and m0stlym0nk for
+reporting).
+
+* Fixed bug with repeated occurrences of Roman numerals.
+
+* Buffed Freesia.
+
+* Fixed bugs related to window redrawing.
+
+* Fixed hex-mage spelling cancellation (thanks to irie for reporting).
+
+* Fixed bugs with [Sh on rings.
+
+* Fixed instant-coffee capture ball bug.
+
+* Fixed a gcu (terminal) display crash caused by tiny window widths
+(thanks to Hugo for reporting).
+
+* Fixed a Word of Recall edge-case that could mis-handle stairs logic
+(thanks to wobbly for reporting).
+
+* Fixed archaeologist crash when identifying floor artifacts.
+
+* Fixed ancient bug with tracking monster-lit squares.
+
+* Fixed crashes with bows and gloves on skillmasters.
+
+* Fixed problem with wild-talent spell macros.
+
+* Fixed Saru's bug with tracking mana pool (thanks to Saru for reporting).
+
+* Fixed pluralization of objects eaten by monsters.
+
+* Numerous minor tweaks and fixes.
+
+-------------------------------------------------------
+
 Changes in FrogComposband 7.1.salmiak:
 
 * Added new dungeons and randomized which dungeons actually appear
