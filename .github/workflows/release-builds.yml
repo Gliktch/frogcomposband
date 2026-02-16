@@ -1,0 +1,123 @@
+name: Build Release Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake gcc make libncurses-dev libx11-dev
+
+      - name: Build
+        run: |
+          sh autogen.sh
+          ./configure --with-no-install
+          make clean
+          make
+
+      - name: Package
+        run: |
+          PKG="frogcomposband-${GITHUB_REF_NAME}-linux-x86_64"
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+          mkdir -p "$PKG"
+          cp -R lib "$PKG/lib"
+          cp readme.txt "$PKG/"
+          cp play "$PKG/"
+          cp frogcomposband "$PKG/"
+          chmod +x "$PKG/frogcomposband" "$PKG/play"
+          tar -czf "$PKG.tar.gz" "$PKG"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.PKG }}.tar.gz
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install autoconf automake
+
+      - name: Build
+        run: |
+          sh autogen.sh
+          ./configure --with-no-install
+          make clean
+          make
+
+      - name: Package
+        run: |
+          PKG="frogcomposband-${GITHUB_REF_NAME}-macos"
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+          mkdir -p "$PKG"
+          cp -R lib "$PKG/lib"
+          cp readme.txt "$PKG/"
+          cp play "$PKG/"
+          cp frogcomposband "$PKG/"
+          chmod +x "$PKG/frogcomposband" "$PKG/play"
+          tar -czf "$PKG.tar.gz" "$PKG"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.PKG }}.tar.gz
+
+  windows:
+    name: Windows x86_64 (MinGW)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            autoconf
+            automake
+            make
+            zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-ncurses
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          sh autogen.sh
+          ./configure --enable-win
+          make clean
+          make
+
+      - name: Package
+        shell: msys2 {0}
+        run: |
+          PKG="frogcomposband-${GITHUB_REF_NAME}-windows-x86_64"
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+          mkdir -p "$PKG"
+          cp -R lib "$PKG/lib"
+          cp readme.txt "$PKG/"
+          cp play "$PKG/"
+          cp frogcomposband.exe "$PKG/"
+          zip -r "$PKG.zip" "$PKG"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.PKG }}.zip
