@@ -5,7 +5,7 @@
 # across a range of different makefiles, to cut down on maintenance.
 #
 
-VERSION = 7.2.sampyla.0
+VERSION = 7.2.pulla.0
 COPYRIGHT = (c) 1995-2020 Angband contributors
 PROGNAME = frogcomposband
 
