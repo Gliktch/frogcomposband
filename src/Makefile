@@ -6,7 +6,7 @@ include Makefile.src
 INCLUDE = $(HDRS)
 OBJECTS = $(ANGFILES) $(CFILES) $(ZFILES)
 SRCS    = ${OBJECTS:.o=.c} ${MAINFILES:.o=.c}
-PROG    = $(PROGNAME)$(PROG_SUFFIX)
+PROG    = ../$(PROGNAME)$(PROG_SUFFIX)
 # VERSION := $(shell ../scripts/version.sh)
 ifneq (${VERSION},)
 	CFLAGS += -DBUILD_ID=${VERSION}
@@ -27,7 +27,7 @@ endif
 ifneq ($(findstring -DMANIFEST,$(CFLAGS)),)
 	MANIFEST_ENABLED = 1
 endif
-CLEAN = frogcomposband.o $(OBJECTS) win/frogcomposband.res
+CLEAN = ../frogcomposband frogcomposband.o $(OBJECTS) win/frogcomposband.res
 DISTCLEAN = autoconf.h
 
 export CFLAGS LDFLAGS LIBS
