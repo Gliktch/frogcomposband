@@ -160,6 +160,22 @@ void delete_object_idx(int o_idx)
     /* Object */
     j_ptr = &o_list[o_idx];
 
+    /* Mega-Hack -- preserve artifacts */
+    if (preserve_mode)
+    {
+        /* Hack -- Preserve unknown artifacts */
+        if (object_is_fixed_artifact(j_ptr) && !object_is_known(j_ptr))
+        {
+            /* Mega-Hack -- Preserve the artifact */
+            a_info[j_ptr->name1].generated = FALSE;
+        }
+        if (random_artifacts && j_ptr->name3 && !object_is_known(j_ptr))
+        {
+            /* Mega-Hack -- Preserve the artifact */
+            a_info[j_ptr->name3].generated = FALSE;
+        }
+    }
+
     /* Dungeon floor */
     if (!(j_ptr->held_m_idx))
     {
@@ -213,6 +229,22 @@ void delete_object(int y, int x)
 
         /* Tell Cornucopia not to track the item anymore */
         if (o_ptr->insured) cornucopia_mark_destroyed(cornucopia_item_policy(o_ptr), o_ptr->number);
+
+        /* Mega-Hack -- preserve artifacts */
+        if (preserve_mode)
+        {
+            /* Hack -- Preserve unknown artifacts */
+            if (object_is_fixed_artifact(o_ptr) && !object_is_known(o_ptr))
+            {
+                /* Mega-Hack -- Preserve the artifact */
+                a_info[o_ptr->name1].generated = FALSE;
+            }
+            if (random_artifacts && o_ptr->name3 && !object_is_known(o_ptr))
+            {
+                /* Mega-Hack -- Preserve the artifact */
+                a_info[o_ptr->name3].generated = FALSE;
+            }
+        }
 
         /* Wipe the object */
         object_wipe(o_ptr);
