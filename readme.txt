@@ -13,7 +13,7 @@ improvements, while staying faithful to rodent's original vision.
 
 --- LINUX (instructions by Chris Kousky; lightly edited)
   Download and unpack the source archive, or clone the git repository:
-    $ git clone https://github.com/sulkasormi/frogcomposband.git
+    $ git clone https://github.com/gliktch/frogcomposband.git
 
   Make sure you have the appropriate development packages installed.
   For example, you might run (Ubuntu or Mint):
