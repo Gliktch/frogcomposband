@@ -3270,6 +3270,8 @@ void choose_new_monster(int m_idx, bool born, int r_idx)
     m_ptr->maxhp = (int)m_ptr->maxhp * m_ptr->max_maxhp / oldmaxhp;
     if (m_ptr->maxhp < 1) m_ptr->maxhp = 1;
     m_ptr->hp = (int)m_ptr->hp * m_ptr->max_maxhp / oldmaxhp;
+
+    p_ptr->window |= PW_MONSTER_LIST;
 }
 
 
