@@ -5162,10 +5162,18 @@ bool target_set(int mode)
     /* Window stuff */
     p_ptr->window |= (PW_OVERHEAD | PW_MONSTER_LIST);
 
+    /* Avoid leaking special targeting range hacks into subwindow refresh logic. */
+    {
+        int old_project_length = project_length;
+        project_length = 0;
+
     /* Prevent losing visibility on newly acquired target (PU_MONSTERS above) */
-    redraw_hack = TRUE;
-    handle_stuff();
-    redraw_hack = FALSE;
+        redraw_hack = TRUE;
+        handle_stuff();
+        redraw_hack = FALSE;
+
+        project_length = old_project_length;
+    }
 
     if (travel_tgt)
     {
