@@ -465,7 +465,7 @@ void self_knowledge(void)
     }
     if (p_ptr->sh_fire)
         info[i++] = "You are surrounded with a fiery aura.";
-    if (p_ptr->sh_shards)
+    if (p_ptr->sh_shards || p_ptr->dustrobe)
         info[i++] = "You are surrounded with a shard aura.";
     if (p_ptr->tim_blood_revenge)
         info[i++] = "You are surrounded with a bloody aura.";

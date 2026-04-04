@@ -599,6 +599,8 @@ static int _build_flags_imp(doc_ptr doc, cptr name, int flg, int dec_flg, _flagz
 
 static void _build_flags_aura(doc_ptr doc, cptr name, int flg, _flagzilla_ptr flagzilla)
 {
+    int shard_ct = p_ptr->sh_shards + (p_ptr->dustrobe ? 1 : 0);
+
     if (_build_flags_imp(doc, name, flg, OF_INVALID, flagzilla))
     {
         if (flg == OF_AURA_FIRE)
@@ -608,7 +610,7 @@ static void _build_flags_aura(doc_ptr doc, cptr name, int flg, _flagzilla_ptr fl
         else if (flg == OF_AURA_ELEC)
              doc_printf(doc, " %dd%d+2", 2 * p_ptr->sh_elec - 1 + p_ptr->lev/10, 2 + p_ptr->lev/ 10);
         else if (flg == OF_AURA_SHARDS)
-             doc_printf(doc, " %dd%d+2", 2 * p_ptr->sh_shards - 1 + p_ptr->lev/10, 2 + p_ptr->lev/ 10);
+             doc_printf(doc, " %dd%d+2", 2 * shard_ct - 1 + p_ptr->lev/10, 2 + p_ptr->lev/ 10);
         else doc_printf(doc, " %dd%d+2", 1 + p_ptr->lev/10, 2 + p_ptr->lev/ 10);
     }
     doc_newline(doc);

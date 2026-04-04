@@ -1591,7 +1591,7 @@ void tim_player_flags(u32b flgs[OF_ARRAY_SIZE])
     {
         add_flag(flgs, OF_AURA_FIRE);
     }
-    if (p_ptr->tim_sh_shards)
+    if (p_ptr->tim_sh_shards || p_ptr->dustrobe)
     {
         add_flag(flgs, OF_AURA_SHARDS);
     }
