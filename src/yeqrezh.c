@@ -1274,6 +1274,12 @@ static bool _yeqrezh_gain_spell(int slot)
         while ((uusi < 0) && (ct > 0))
         {
             uusi = choose_spell(spells, ct, "Learn", "spell", 1000, FALSE);
+            if (uusi >= 0)
+            {
+                cptr name = get_spell_name(spells[uusi].spell.fn);
+                if (!get_check(format("You will learn the spell %s. Are you sure? ", name)))
+                    uusi = _INVALID_SPELL;
+            }
         }
     }
     if ((uusi < 0) || (uusi >= ct)) return FALSE;
