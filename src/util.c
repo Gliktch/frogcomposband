@@ -3183,8 +3183,8 @@ s16b get_quantity_aux(cptr prompt, int max, int default_amt)
     /* Extract a number */
     amt = atoi(buf);
 
-    /* A letter means "all" */
-    if (isalpha(buf[0])) amt = max;
+    /* A letter or '*' means "all" */
+    if (isalpha(buf[0]) || buf[0] == '*') amt = max;
 
     /* Enforce the maximum */
     if (amt > max) amt = max;
