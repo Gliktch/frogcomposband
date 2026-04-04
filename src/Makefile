@@ -44,7 +44,12 @@ $(MANIFEST_SRC): manifest-force
 	@sh ../mk/gen_manifest.sh $@ ..
 endif
 
-$(PROG): $(OBJECTS) $(MAINFILES)
+# Always clear manifest-guarded objects so toggling MANIFEST cannot leave stale references.
+.PHONY: prebuild-manifest-safety
+prebuild-manifest-safety:
+	@rm -f init2.o dungeon.o main-win.o
+
+$(PROG): prebuild-manifest-safety $(OBJECTS) $(MAINFILES)
 	$(CC) -o $@ $(OBJECTS) $(MAINFILES) $(LDFLAGS) $(LDADD) $(LIBS)
 	@printf "%10s %-20s\n" LINK $@
 
