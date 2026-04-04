@@ -912,8 +912,15 @@ static int _inspector(obj_prompt_context_ptr context, int cmd)
 void obj_inspect_ui(void)
 {
     obj_prompt_t prompt = {0};
+    int          wgt = py_total_weight();
+    int          pct = wgt * 100 / weight_limit();
+    string_ptr   s;
 
-    prompt.prompt = "Examine which item <color:w>(<color:keypress>Esc</color> to exit)</color>?";
+    s = string_alloc_format(
+        "<color:w>Carrying %d.%d pounds (<color:%c>%d%%</color> capacity).</color>\n\n"
+        "Examine which item <color:w>(<color:keypress>Esc</color> to exit)</color>?",
+        wgt / 10, wgt % 10, pct > 100 ? 'r' : 'G', pct);
+    prompt.prompt = string_buffer(s);
     prompt.error = "You have nothing to examine.";
     prompt.filter = obj_exists;
     prompt.where[0] = INV_PACK;
@@ -926,6 +933,7 @@ void obj_inspect_ui(void)
 
     obj_prompt(&prompt);
     allow_special3_hack = FALSE;
+    string_free(s);
 
     /* The '-' key autoselects a single floor object */
     if (prompt.obj)
