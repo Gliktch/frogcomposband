@@ -1425,7 +1425,7 @@ static cptr do_life_spell(int spell, int mode)
 
     case 26:
         if (name) return "Annihilate Undead";
-        if (desc) return "Eliminates all nearby undead monsters, exhausting you. Powerful or unique monsters may be able to resist.";
+        if (desc) return "Attempts to eliminate all nearby undead monsters, exhausting you.\nPowerful monsters may resist, and unique monsters are immune.";
 
         {
             int power = spell_power(plev + 50);
@@ -1720,7 +1720,7 @@ static cptr do_sorcery_spell(int spell, int mode)
 
     case 10:
         if (name) return "Slow Monster";
-        if (desc) return "Attempts to slow a monster.";
+        if (desc) return "Attempts to slow a single monster.\nPowerful monsters may resist, and unique monsters are immune.";
 
         {
             int power = spell_power(plev * 2);
@@ -1827,7 +1827,7 @@ static cptr do_sorcery_spell(int spell, int mode)
         break;
 
     case 16:
-        if (name) return "Inventory Protection";
+        if (name) return "Inventory Resistance";
         if (desc) return "For a short while, items in your pack have a chance to resist destruction.";
 
         {
@@ -3677,7 +3677,7 @@ static cptr do_death_spell(int spell, int mode)
 
     case 11:
         if (name) return "Genocide One";
-        if (desc) return "Attempts to vanish a monster.";
+        if (desc) return "Attempts to eliminate a single monster.\nPowerful monsters may resist, and unique monsters are immune.";
 
         {
             int power = spell_power(plev*3);
@@ -3770,7 +3770,7 @@ static cptr do_death_spell(int spell, int mode)
 
     case 15:
         if (name) return "Genocide";
-        if (desc) return "Eliminates an entire class of monster, exhausting you. Powerful or unique monsters may resist.";
+        if (desc) return "Attempts to eliminate all monsters of a specified species, exhausting you.\nPowerful monsters may resist, and unique monsters are immune.";
 
         {
             int power = spell_power(plev*3);
@@ -4041,7 +4041,7 @@ static cptr do_death_spell(int spell, int mode)
 
     case 29:
         if (name) return "Mass Genocide";
-        if (desc) return "Eliminates all nearby monsters, exhausting you. Powerful or unique monsters may be able to resist.";
+        if (desc) return "Attempts to eliminate all nearby monsters, exhausting you.\nPowerful monsters may resist, and unique monsters are immune.";
 
         {
             int power = spell_power(plev*3);

@@ -3302,9 +3302,9 @@ static void _report_encumbrance(void)
     if (p_ptr->old_cumber_armor != p_ptr->cumber_armor)
     {
         if (p_ptr->cumber_armor)
-            msg_print("The weight of your equipment encumbers your movement.");
+            msg_print("The weight of your equipment hinders your spellcasting.");
         else
-            msg_print("You feel able to move more freely.");
+            msg_print("Your spellcasting feels less restricted.");
         p_ptr->old_cumber_armor = p_ptr->cumber_armor;
     }
 }

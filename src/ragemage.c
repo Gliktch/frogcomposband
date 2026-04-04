@@ -188,7 +188,7 @@ static bool _detect_objects_ego(int range)
     }
 
     if (detect)
-        msg_print("You sense the presence of magic objects!");
+        msg_print("You sense magical objects!");
 
     return detect;
 }

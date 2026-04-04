@@ -83,7 +83,7 @@ bool _detect_devices(int range)
     }
 
     if (result)
-        msg_print("You sense the presence of magical devices!");
+        msg_print("You sense magical devices!");
 
     return result;
 }

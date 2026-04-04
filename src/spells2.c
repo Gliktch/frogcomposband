@@ -965,6 +965,44 @@ static bool detect_feat_flag(int range, int flag, bool known)
     return detect;
 }
 
+static bool _detect_quiet = FALSE;
+
+static void _detect_msg(cptr msg)
+{
+    if (!_detect_quiet)
+        msg_print(msg);
+}
+
+static void _detect_add(char *parts, cptr part)
+{
+    if (parts[0])
+        my_strcat(parts, ", ", 512);
+    my_strcat(parts, part, 512);
+}
+
+static void _detect_report_all(char *parts)
+{
+    char msg[512];
+    char *last = strrchr(parts, ',');
+    bool oxford = last && strchr(parts, ',') != last;
+
+    if (!parts[0])
+    {
+        msg_print("You detect nothing! It's... unnerving.");
+        return;
+    }
+
+    if (last)
+    {
+        *last = '\0';
+        snprintf(msg, sizeof(msg), "You sense %s%s and%s!", parts, oxford ? "," : "", last + 1);
+    }
+    else
+        snprintf(msg, sizeof(msg), "You sense %s!", parts);
+
+    msg_print(msg);
+}
+
 
 /*
  * Detect all traps on current panel
@@ -981,7 +1019,7 @@ bool detect_traps(int range, bool known)
     /* Describe */
     if (detect)
     {
-        msg_print("You sense the presence of traps!");
+        _detect_msg("You sense traps!");
     }
 
     /* Result */
@@ -1001,7 +1039,7 @@ bool detect_doors(int range)
     /* Describe */
     if (detect)
     {
-        msg_print("You sense the presence of doors!");
+        _detect_msg("You sense doors!");
     }
 
     /* Result */
@@ -1022,7 +1060,7 @@ bool detect_stairs(int range)
     if (detect)
     {
         p_ptr->window |= PW_OBJECT_LIST;
-        msg_print("You sense the presence of stairs!");
+        _detect_msg("You sense stairs!");
     }
 
     /* Result */
@@ -1043,7 +1081,7 @@ bool detect_treasure(int range)
     if (detect)
     {
         p_ptr->window |= PW_OBJECT_LIST;
-        msg_print("You sense the presence of buried treasure!");
+        _detect_msg("You sense buried treasure!");
     }
 
     /* Result */
@@ -1101,7 +1139,7 @@ bool detect_objects_gold(int range)
     if (detect)
     {
         p_ptr->window |= PW_OBJECT_LIST;
-        msg_print("You sense the presence of treasure!");
+        _detect_msg("You sense treasure!");
 
     }
 
@@ -1165,7 +1203,7 @@ bool detect_objects_normal(int range)
     /* Describe */
     if (detect)
     {
-        msg_print("You sense the presence of objects!");
+        _detect_msg("You sense objects!");
 
     }
 
@@ -1260,7 +1298,7 @@ bool detect_objects_magic(int range)
     /* Describe */
     if (detect)
     {
-        msg_print("You sense the presence of magic objects!");
+        _detect_msg("You sense magical objects!");
 
     }
 
@@ -1322,7 +1360,7 @@ bool detect_monsters_normal(int range)
         p_ptr->window |= PW_MONSTER_LIST;
 
         /* Describe result */
-        msg_print("You sense the presence of monsters!");
+        _detect_msg("You sense monsters!");
 
     }
 
@@ -1389,7 +1427,7 @@ bool detect_monsters_invis(int range)
         p_ptr->window |= PW_MONSTER_LIST;
 
         /* Describe result */
-        msg_print("You sense the presence of invisible creatures!");
+        _detect_msg("You sense invisible creatures!");
 
     }
 
@@ -1451,7 +1489,7 @@ bool detect_monsters_evil(int range)
         p_ptr->window |= PW_MONSTER_LIST;
 
         /* Describe result */
-        msg_print("You sense the presence of evil creatures!");
+        _detect_msg("You sense evil creatures!");
 
     }
 
@@ -1518,7 +1556,7 @@ bool detect_monsters_nonliving(int range)
         p_ptr->window |= PW_MONSTER_LIST;
 
         /* Describe result */
-        msg_print("You sense the presence of unnatural beings!");
+        _detect_msg("You sense unnatural beings!");
 
     }
 
@@ -1621,7 +1659,7 @@ bool detect_monsters_magical(int range)
     if (flag)
     {
         p_ptr->window |= PW_MONSTER_LIST;
-        msg_print("You sense the presence of magical foes!");
+        _detect_msg("You sense magical foes!");
     }
 
     /* Result */
@@ -1684,7 +1722,7 @@ bool detect_monsters_mind(int range)
         p_ptr->window |= PW_MONSTER_LIST;
 
         /* Describe result */
-        msg_print("You sense the presence of someone's mind!");
+        _detect_msg("You sense the presence of someone's mind!");
 
     }
 
@@ -1751,7 +1789,12 @@ bool detect_monsters_string(int range, cptr Match)
         p_ptr->window |= PW_MONSTER_LIST;
 
         /* Describe result */
-        msg_print("You sense the presence of monsters!");
+        if (!strcmp(Match, "$"))
+            _detect_msg("You sense moving treasure!");
+        else if (!strcmp(Match, "!=?|/`"))
+            _detect_msg("You sense animate objects!");
+        else
+            _detect_msg("You sense monsters!");
 
     }
 
@@ -1825,7 +1868,7 @@ bool detect_monsters_xxx(int range, u32b match_flag)
         }
 
         /* Describe result */
-        msg_format("You sense the presence of %s!", desc_monsters);
+        msg_format("You sense %s!", desc_monsters);
 
         msg_print(NULL);
     }
@@ -1841,19 +1884,105 @@ bool detect_monsters_xxx(int range, u32b match_flag)
 bool detect_all(int range)
 {
     bool detect = FALSE;
+    bool old_detect_quiet = _detect_quiet;
+    bool traps, doors, stairs, buried_treasure, treasure, moving_treasure;
+    bool objects, animate_objects, invisible_creatures, monsters;
+    char parts[512] = "";
+    int i;
+    int range2 = range;
+
+    if (d_info[dungeon_type].flags1 & DF1_DARKNESS) range2 /= 3;
+
+    treasure = FALSE;
+    objects = FALSE;
+    for (i = 1; i < o_max; i++)
+    {
+        object_type *o_ptr = &o_list[i];
+        int y, x;
+
+        if (!o_ptr->k_idx) continue;
+        if (o_ptr->held_m_idx) continue;
+
+        y = o_ptr->loc.y;
+        x = o_ptr->loc.x;
+
+        if (distance(py, px, y, x) > range2) continue;
+
+        if (o_ptr->tval == TV_GOLD)
+            treasure = TRUE;
+        else
+            objects = TRUE;
+    }
+
+    _detect_quiet = TRUE;
+
+    traps = detect_traps(range, TRUE);
+    doors = detect_doors(range);
+    stairs = detect_stairs(range);
+    buried_treasure = detect_feat_flag(range, FF_HAS_GOLD, TRUE);
+    if (detect_objects_gold(range)) detect = TRUE;
+    moving_treasure = detect_monsters_string(range, "$");
+    if (detect_objects_normal(range)) detect = TRUE;
+    animate_objects = detect_monsters_string(range, "!=?|/`");
+    invisible_creatures = detect_monsters_invis(range);
+    monsters = detect_monsters_normal(range);
+
+    _detect_quiet = old_detect_quiet;
 
     /* Detect everything */
-    if (detect_traps(range, TRUE)) detect = TRUE;
-    if (detect_doors(range)) detect = TRUE;
-    if (detect_stairs(range)) detect = TRUE;
+    if (traps)
+    {
+        detect = TRUE;
+        _detect_add(parts, "traps");
+    }
+    if (doors)
+    {
+        detect = TRUE;
+        _detect_add(parts, "doors");
+    }
+    if (stairs)
+    {
+        detect = TRUE;
+        _detect_add(parts, "stairs");
+    }
+    if (buried_treasure)
+    {
+        detect = TRUE;
+        p_ptr->window |= PW_OBJECT_LIST;
+        _detect_add(parts, "buried treasure");
+    }
+    if (treasure)
+    {
+        detect = TRUE;
+        _detect_add(parts, "treasure");
+    }
+    if (moving_treasure)
+    {
+        detect = TRUE;
+        _detect_add(parts, "moving treasure");
+    }
+    if (objects)
+    {
+        detect = TRUE;
+        _detect_add(parts, "objects");
+    }
+    if (animate_objects)
+    {
+        detect = TRUE;
+        _detect_add(parts, "animate objects");
+    }
+    if (invisible_creatures)
+    {
+        detect = TRUE;
+        _detect_add(parts, "invisible creatures");
+    }
+    if (monsters)
+    {
+        detect = TRUE;
+        _detect_add(parts, "monsters");
+    }
 
-    /* There are too many hidden treasure. So... */
-    /* if (detect_treasure(range)) detect = TRUE; */
-
-    if (detect_objects_gold(range)) detect = TRUE;
-    if (detect_objects_normal(range)) detect = TRUE;
-    if (detect_monsters_invis(range)) detect = TRUE;
-    if (detect_monsters_normal(range)) detect = TRUE;
+    _detect_report_all(parts);
 
     /* Result */
     return (detect);
