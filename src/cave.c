@@ -4470,6 +4470,10 @@ void wiz_lite(bool ninja)
     {
         if (cave[py][px].info & CAVE_GLOW) set_superstealth(FALSE);
     }
+
+    /* Shouldn't be needed, but end-of-turn handle_stuff misses the update for some reason */
+    p_ptr->window |= PW_OBJECT_LIST;
+    window_stuff();
 }
 
 
