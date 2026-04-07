@@ -51,6 +51,9 @@ void set_action(int typ)
         case ACTION_REST:
             resting = 0;
             break;
+        case ACTION_CYTOMORPH:
+            jelly_cancel_cytomorph();
+            break;
         case ACTION_LEARN:
             msg_print("You stop learning spells.");
             new_mane = FALSE;
@@ -96,6 +99,9 @@ void set_action(int typ)
         break;
     case ACTION_FISH:
         msg_print("You begin fishing...");
+        break;
+    case ACTION_CYTOMORPH:
+        msg_print("You begin your transformation.");
         break;
     case ACTION_QUICK_WALK:
         msg_print("You begin to move extremely fast.");

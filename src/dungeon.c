@@ -4660,7 +4660,8 @@ static void process_player(void)
           || command_rep
           || p_ptr->action == ACTION_REST
           || p_ptr->action == ACTION_GLITTER
-          || p_ptr->action == ACTION_FISH )
+          || p_ptr->action == ACTION_FISH
+          || p_ptr->action == ACTION_CYTOMORPH )
         {
             /* Do not wait */
             inkey_scan = TRUE;
@@ -4955,6 +4956,11 @@ static void process_player(void)
         else if (p_ptr->action == ACTION_FISH)
         {
             energy_use = 100;
+        }
+        else if (p_ptr->action == ACTION_CYTOMORPH)
+        {
+            energy_use = 100;
+            jelly_process_cytomorph();
         }
         else if (p_ptr->action == ACTION_GLITTER)
         {

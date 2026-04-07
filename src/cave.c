@@ -5334,6 +5334,7 @@ void disturb(int stop_search, int unused_flag)
     if ( p_ptr->action == ACTION_REST
       || p_ptr->action == ACTION_FISH
       || p_ptr->action == ACTION_GLITTER
+      || p_ptr->action == ACTION_CYTOMORPH
       || (stop_search && p_ptr->action == ACTION_SEARCH) )
     {
         /* Cancel */

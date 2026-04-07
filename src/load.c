@@ -759,6 +759,11 @@ static void rd_extra(savefile_ptr file)
 
     p_ptr->autopick_autoregister = savefile_read_byte(file) ? TRUE: FALSE;
     p_ptr->action = savefile_read_byte(file);
+    if (p_ptr->action == ACTION_CYTOMORPH)
+    {
+        p_ptr->action = ACTION_NONE;
+        jelly_cancel_cytomorph();
+    }
     preserve_mode = savefile_read_byte(file);
     p_ptr->wait_report_score = savefile_read_byte(file);
 

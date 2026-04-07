@@ -163,48 +163,21 @@ void android_calc_exp(void)
 
 static power_info *_android_get_powers(void)
 {
-    static power_info android_powers[2] =
-    {
-        { A_STR, { -1, -1, -1, NULL }},
-        { -1, {-1, -1, -1, NULL}}
-    };
-    spell_info *spell = &android_powers[0].spell;
+    static power_info android_powers[6];
+    int ct = 0;
 
-    if (p_ptr->lev < 10)
-    {
-        spell->level = 1;
-        spell->cost = 7;
-        spell->fail = 30;
-        spell->fn = android_ray_gun_spell;
-    }
-    else if (p_ptr->lev < 25)
-    {
-        spell->level = 10;
-        spell->cost = 13;
-        spell->fail = 30;
-        spell->fn = android_blaster_spell;
-    }
-    else if (p_ptr->lev < 35)
-    {
-        spell->level = 25;
-        spell->cost = 26;
-        spell->fail = 40;
-        spell->fn = android_bazooka_spell;
-    }
-    else if (p_ptr->lev < 45)
-    {
-        spell->level = 35;
-        spell->cost = 40;
-        spell->fail = 50;
-        spell->fn = android_beam_cannon_spell;
-    }
-    else
-    {
-        spell->level = 45;
-        spell->cost = 60;
-        spell->fail = 70;
-        spell->fn = android_rocket_spell;
-    }
+    if (p_ptr->lev >= 1)
+        android_powers[ct++] = (power_info){ A_STR, { 1, 7, 30, android_ray_gun_spell } };
+    if (p_ptr->lev >= 10)
+        android_powers[ct++] = (power_info){ A_STR, { 10, 13, 30, android_blaster_spell } };
+    if (p_ptr->lev >= 25)
+        android_powers[ct++] = (power_info){ A_STR, { 25, 26, 40, android_bazooka_spell } };
+    if (p_ptr->lev >= 35)
+        android_powers[ct++] = (power_info){ A_STR, { 35, 40, 50, android_beam_cannon_spell } };
+    if (p_ptr->lev >= 45)
+        android_powers[ct++] = (power_info){ A_STR, { 45, 60, 70, android_rocket_spell } };
+
+    android_powers[ct] = (power_info){ -1, { -1, -1, -1, NULL } };
     return android_powers;
 }
 static void _android_calc_bonuses(void)

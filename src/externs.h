@@ -2794,6 +2794,8 @@ extern bool     imitator_cast(bool revenge);
 extern class_t *imitator_get_class(void);
 extern class_t *lawyer_get_class(void);
 extern class_t *mage_get_class(void);
+extern void     jelly_cancel_cytomorph(void);
+extern bool     jelly_process_cytomorph(void);
 extern equip_template_ptr mon_get_equip_template(void);
 extern cptr     mon_name(int r_idx);
 

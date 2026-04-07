@@ -351,6 +351,8 @@ static void _display_resists(monster_race *r_ptr, doc_ptr doc)
         vec_add(v, string_copy_s("<color:s>Gravity</color>"));
     if (r_ptr->flagsr & RFR_RES_DISI)
         vec_add(v, string_copy_s("<color:s>Disintegration</color>"));
+    if (r_ptr->flagsr & RFR_RES_MANA)
+        vec_add(v, string_copy_s("<color:v>Mana</color>"));
 
     if (vec_length(v))
     {

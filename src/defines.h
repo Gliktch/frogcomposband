@@ -2561,6 +2561,7 @@ enum {
 #define ACTION_SPELL      9
 #define ACTION_STALK      10
 #define ACTION_GLITTER    11      /* Ring waiting for a suitable ring bearer ... */
+#define ACTION_CYTOMORPH  12
 
 /* Birth/spoiler menu constants */
 #define B_MAX_RACES_PER_GROUP 23
@@ -3495,7 +3496,7 @@ enum r_drop_e
 #define RFR_XXX28           0x10000000
 #define RFR_XXX29           0x20000000
 #define RFR_XXX30           0x40000000
-#define RFR_XXX31           0x80000000
+#define RFR_RES_MANA        0x80000000  /* Resist mana */
 
 #define RFX_QUESTOR         0x00000001  /* Unique Monster tagged for a random quest */
 #define RFX_SUPPRESS        0x00000002  /* Unique Monster won't generate this game */

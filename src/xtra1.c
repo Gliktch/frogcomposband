@@ -1795,6 +1795,11 @@ static void prt_state(void)
                 strcpy(text, "Fish");
                 break;
             }
+            case ACTION_CYTOMORPH:
+            {
+                strcpy(text, "Morph");
+                break;
+            }
             case ACTION_KAMAE:
             {
                 int i;

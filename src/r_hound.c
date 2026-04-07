@@ -87,6 +87,51 @@ static cptr _mon_name(int r_idx)
     return ""; /* Birth Menu */
 }
 
+static int _choose_final_evolution(void)
+{
+    static int _choices[] = { MON_HOUND_OF_TINDALOS, MON_MANA_HOUND, MON_AETHER_HOUND };
+
+    if (spoiler_hack)
+        return _choices[0];
+
+    screen_save();
+    while (1)
+    {
+        char ch;
+
+        Term_clear();
+        prt("Choose your final evolution:", 2, 0);
+        prt("  a) Hound of Tindalos", 4, 0);
+        prt("  b) Mana hound", 5, 0);
+        prt("  c) Aether hound", 6, 0);
+
+        ch = inkey();
+        if (isalpha(ch))
+        {
+            ch = tolower(ch);
+            if (A2I(ch) >= 0 && A2I(ch) < 3)
+            {
+                screen_load();
+                return _choices[A2I(ch)];
+            }
+        }
+        bell();
+    }
+}
+
+static bool _is_mana_hound_player(void)
+{
+    return p_ptr->prace == RACE_MON_HOUND
+        && p_ptr->current_r_idx == MON_MANA_HOUND
+        && p_ptr->mimic_form == MIMIC_NONE;
+}
+
+static void _character_dump(doc_ptr doc)
+{
+    doc_printf(doc, "<topic:Abilities>================================== <color:keypress>A</color>bilities ==================================\n\n");
+    doc_printf(doc, "  * You take reduced damage from mana attacks.\n");
+}
+
 /**********************************************************************
  * Hound Equipment
  **********************************************************************/
@@ -534,6 +579,7 @@ static void _calc_bonuses(void) {
         break;
     case MON_MANA_HOUND:
         p_ptr->pspeed += 10;
+        res_add(RES_DISEN);
         res_add(RES_CONF);
         p_ptr->free_act++;
         break;
@@ -663,6 +709,7 @@ static void _get_flags(u32b flgs[OF_ARRAY_SIZE]) {
         break;
     case MON_MANA_HOUND:
         add_flag(flgs, OF_SPEED);
+        add_flag(flgs, OF_RES_DISEN);
         add_flag(flgs, OF_RES_CONF);
         add_flag(flgs, OF_FREE_ACT);
         break;
@@ -695,7 +742,10 @@ static void _gain_level(int new_level) {
     if (tier < 0 || tier == _MAX_TIERS - 1) return;
     if (p_ptr->lev >= _tiers[tier + 1].level)
     {
-        p_ptr->current_r_idx = _random(_tiers[tier+1].r_ids);
+        if (tier + 1 == _MAX_TIERS - 1)
+            p_ptr->current_r_idx = _choose_final_evolution();
+        else
+            p_ptr->current_r_idx = _random(_tiers[tier+1].r_ids);
         msg_format("You have evolved into a %s.", _mon_name(p_ptr->current_r_idx));
         p_ptr->redraw |= PR_MAP;
     }
@@ -717,9 +767,8 @@ race_t *mon_hound_get_race(void)
         me.desc = "While Zephyr Hounds typically hunt in packs, you have chosen to go it alone. "
                     "You will begin life in the weak form of a Clear Hound. As you mature, "
                     "you will take a number of evolutionary steps. At each such step, the "
-                    "form you evolve into will be randomly determined; but each tier offers "
-                    "more powerful choices than the last. Who knows - you may even evolve "
-                    "into an Aether Hound some day.\n \n"
+                    "form you evolve into will usually be randomly determined; but each tier offers "
+                    "more powerful choices than the last, and you may guide your final evolution.\n \n"
                     "Hounds are not magical, and so cannot cast spells; however, they are "
                     "fantastic hunters, and learn a number of special abilities that will aid them "
                     "in this endeavour. And as you probably know all too well, hounds love to breathe!\n \n"
@@ -742,6 +791,7 @@ race_t *mon_hound_get_race(void)
         me.get_powers_fn = _get_powers;
         me.get_flags = _get_flags;
         me.gain_level = _gain_level;
+        me.character_dump = _character_dump;
         me.birth = _birth;
 
         me.flags = RACE_IS_MONSTER; /* | RACE_IS_ILLITERATE? */
@@ -760,6 +810,7 @@ race_t *mon_hound_get_race(void)
     me.stats[A_CON] =  1 + p_ptr->lev/15;
     me.stats[A_CHR] =  0 + p_ptr->lev/25;
     me.equip_template = mon_get_equip_template();
+    me.character_dump = _is_mana_hound_player() ? _character_dump : NULL;
 
     return &me;
 }

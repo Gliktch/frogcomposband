@@ -1046,6 +1046,13 @@ int gf_affect_p(int who, int type, int dam, int flags)
     case GF_MANA:
     case GF_SEEKER:
     case GF_SUPER_RAY:
+        if (type == GF_MANA
+         && p_ptr->prace == RACE_MON_HOUND
+         && p_ptr->current_r_idx == MON_MANA_HOUND
+         && p_ptr->mimic_form == MIMIC_NONE)
+        {
+            dam = MAX(1, dam * 2 / 3);
+        }
         if (fuzzy) msg_print("You are hit by pure magic!");
         result = take_hit(damage_type, dam, m_name_real);
         break;
@@ -2282,6 +2289,12 @@ bool gf_affect_m(int who, mon_ptr mon, int type, int dam, int flags)
     case GF_SEEKER:
     case GF_SUPER_RAY:
         if (seen) obvious = TRUE;
+        if (type == GF_MANA && race->flagsr & RFR_RES_MANA)
+        {
+            note = " resists!";
+            dam = MAX(1, dam * 2 / 3);
+            mon_lore_r(mon, RFR_RES_MANA);
+        }
         _BABBLE_HACK()
         break;
     case GF_DISINTEGRATE:

@@ -26,6 +26,9 @@ static cptr _desc =
   "However, they quickly evolve into a Gelatinous Cube and then into an Acidic Cytoplasm. "
   "Jellies take one additional, powerful evolutionary step late in life.";
 
+static int _cytomorph_target = 0;
+static int _cytomorph_timer = 0;
+
 static void _divide_spell(int cmd, variant *res)
 {
     switch (cmd)
@@ -47,10 +50,103 @@ static void _divide_spell(int cmd, variant *res)
         break;
     }
 }
-static power_info _jelly_get_powers[] = {
-    { A_CON, { 1, 10, 0, _divide_spell}},
-    { -1, {-1, -1, -1, NULL} }
-};
+
+static bool _is_cytomorph_form(int r_idx)
+{
+    return r_idx == MON_ACIDIC_CYTOPLASM || r_idx == MON_SHOGGOTH;
+}
+
+static bool _can_cytomorph(void)
+{
+    return p_ptr->prace == RACE_MON_JELLY
+        && p_ptr->max_plv >= 42
+        && _is_cytomorph_form(p_ptr->current_r_idx);
+}
+
+void jelly_cancel_cytomorph(void)
+{
+    _cytomorph_target = 0;
+    _cytomorph_timer = 0;
+}
+
+static void _begin_cytomorph(int target_r_idx)
+{
+    _cytomorph_target = target_r_idx;
+    _cytomorph_timer = 10;
+    set_action(ACTION_CYTOMORPH);
+}
+
+bool jelly_process_cytomorph(void)
+{
+    int target_r_idx;
+
+    if (p_ptr->action != ACTION_CYTOMORPH)
+        return FALSE;
+
+    if (_cytomorph_timer > 0)
+        _cytomorph_timer--;
+
+    if (_cytomorph_timer > 0)
+        return FALSE;
+
+    target_r_idx = _cytomorph_target;
+    set_action(ACTION_NONE);
+    p_ptr->current_r_idx = target_r_idx;
+    equip_on_change_race();
+    p_ptr->redraw |= PR_MAP | PR_BASIC;
+    msg_format("You have transformed into %s.", get_race()->subname);
+    return TRUE;
+}
+
+static void _cytomorph_spell(int cmd, variant *res)
+{
+    switch (cmd)
+    {
+    case SPELL_NAME:
+        var_set_string(res, "Cytomorph");
+        break;
+    case SPELL_DESC:
+        var_set_string(res, "Transform between Acidic Cytoplasm and Shoggoth.");
+        break;
+    case SPELL_CAST:
+    {
+        int target_r_idx;
+
+        if (!_can_cytomorph())
+        {
+            var_set_bool(res, FALSE);
+            break;
+        }
+
+        target_r_idx = p_ptr->current_r_idx == MON_SHOGGOTH ? MON_ACIDIC_CYTOPLASM : MON_SHOGGOTH;
+        if (!get_check("You will be vulnerable during this transformation. Are you sure? "))
+        {
+            var_set_bool(res, FALSE);
+            break;
+        }
+
+        _begin_cytomorph(target_r_idx);
+        var_set_bool(res, TRUE);
+        break;
+    }
+    default:
+        default_spell(cmd, res);
+        break;
+    }
+}
+
+static power_info *_get_powers(void)
+{
+    static power_info spells[3];
+    int               ct = 0;
+
+    spells[ct++] = (power_info){ A_CON, { 1, 10, 0, _divide_spell } };
+    if (_can_cytomorph())
+        spells[ct++] = (power_info){ A_CON, { 42, 0, 0, _cytomorph_spell } };
+    spells[ct] = (power_info){ -1, { -1, -1, -1, NULL } };
+
+    return spells;
+}
 static void _jelly_calc_innate_attacks(void)
 {
     if (equip_is_empty_hand(0))
@@ -329,6 +425,14 @@ static void _birth(void)
     py_birth_obj(&forge);
 }
 
+static int _equip_r_idx(void)
+{
+    if (p_ptr->max_plv >= 42) return MON_SHOGGOTH;
+    if (p_ptr->max_plv >= 28) return MON_ACIDIC_CYTOPLASM;
+    if (p_ptr->max_plv >= 14) return MON_GELATINOUS_CUBE;
+    return MON_BLACK_OOZE;
+}
+
 race_t *mon_jelly_get_race(void)
 {
     race_t *result = NULL;
@@ -356,11 +460,11 @@ race_t *mon_jelly_get_race(void)
     result->exp = 150;
     result->flags = RACE_IS_MONSTER /* | RACE_IS_ILLITERATE */;
     result->gain_level = _gain_level;
-    result->get_powers = _jelly_get_powers;
+    result->get_powers_fn = _get_powers;
     result->calc_innate_attacks = _jelly_calc_innate_attacks;
     result->birth = _birth;
     result->base_hp = 40;
-    result->equip_template = mon_get_equip_template();
+    result->equip_template = &b_info[r_info[_equip_r_idx()].body.body_idx];
     result->pseudo_class_idx = CLASS_WARRIOR;
     result->shop_adjust = 125;
     result->destroy_object = jelly_eat_object;
@@ -399,4 +503,3 @@ bool jelly_eat_object(object_type *o_ptr)
     */
     return TRUE;
 }
-
