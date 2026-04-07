@@ -1380,42 +1380,6 @@ void do_cmd_browse(void)
     screen_load();
 }
 
-static bool ang_sort_comp_pet_dismiss(vptr u, vptr v, int a, int b)
-{
-    u16b *who = (u16b*)(u);
-
-    int w1 = who[a];
-    int w2 = who[b];
-
-    monster_type *m_ptr1 = &m_list[w1];
-    monster_type *m_ptr2 = &m_list[w2];
-    monster_race *r_ptr1 = &r_info[m_ptr1->r_idx];
-    monster_race *r_ptr2 = &r_info[m_ptr2->r_idx];
-
-    /* Unused */
-    (void)v;
-
-    if (w1 == p_ptr->riding) return TRUE;
-    if (w2 == p_ptr->riding) return FALSE;
-
-    if (m_ptr1->nickname && !m_ptr2->nickname) return TRUE;
-    if (m_ptr2->nickname && !m_ptr1->nickname) return FALSE;
-
-    if (!m_ptr1->parent_m_idx && m_ptr2->parent_m_idx) return TRUE;
-    if (!m_ptr2->parent_m_idx && m_ptr1->parent_m_idx) return FALSE;
-
-    if ((r_ptr1->flags1 & RF1_UNIQUE) && !(r_ptr2->flags1 & RF1_UNIQUE)) return TRUE;
-    if ((r_ptr2->flags1 & RF1_UNIQUE) && !(r_ptr1->flags1 & RF1_UNIQUE)) return FALSE;
-
-    if (r_ptr1->level > r_ptr2->level) return TRUE;
-    if (r_ptr2->level > r_ptr1->level) return FALSE;
-
-    if (m_ptr1->hp > m_ptr2->hp) return TRUE;
-    if (m_ptr2->hp > m_ptr1->hp) return FALSE;
-
-    return w1 <= w2;
-}
-
 void check_pets_num_and_align(monster_type *m_ptr, bool inc)
 {
     s32b old_friend_align = friend_align;
@@ -1437,18 +1401,73 @@ void check_pets_num_and_align(monster_type *m_ptr, bool inc)
     if (old_friend_align != friend_align) p_ptr->update |= (PU_BONUS);
 }
 
-int calculate_upkeep(void)
+int pet_upkeep_limit(void)
+{
+    int div = get_class()->pets;
+
+    /* Lower divs are better ... I think. */
+    if (prace_is_(RACE_DEMIGOD) && p_ptr->psubrace == DEMIGOD_APHRODITE)
+        div /= 2;
+
+    if (prace_is_(RACE_MON_QUYLTHULG))
+        div = 7;
+
+    if (p_ptr->dragon_realm == DRAGON_REALM_DOMINATION)
+        div = 9;
+
+    if (prace_is_(RACE_MON_VAMPIRE))
+        div = 10;
+
+    return p_ptr->lev * 80 / div;
+}
+
+int pet_upkeep_cost_x2(monster_type *m_ptr, bool *have_a_unique)
+{
+    monster_race *r_ptr = &r_info[m_ptr->r_idx];
+
+    if (warlock_is_pact_monster(r_ptr))
+    {
+        int cost2 = r_ptr->level;
+
+        if (r_ptr->flags1 & RF1_UNIQUE)
+            cost2 += r_ptr->level;
+        return cost2;
+    }
+
+    if (r_ptr->flags1 & RF1_UNIQUE)
+    {
+        if (p_ptr->pclass == CLASS_CAVALRY || p_ptr->prace == RACE_MON_RING)
+        {
+            int level = r_ptr->level + 5;
+
+            if (p_ptr->riding == m_ptr->id)
+                return level * 4;
+            else if (!*have_a_unique && (r_ptr->flags7 & RF7_RIDING))
+            {
+                *have_a_unique = TRUE;
+                return level * 7;
+            }
+            *have_a_unique = TRUE;
+            return level * 20;
+        }
+        return (r_ptr->level + 5) * 20;
+    }
+
+    return r_ptr->level * 2;
+}
+
+void pet_calc_summary(int *pet_count, int *total_levels, int *limit, int *upkeep)
 {
     s32b old_friend_align = friend_align;
     bool old_warning = p_ptr->upkeep_warning;
     int m_idx;
     bool have_a_unique = FALSE;
-    s32b total_friend_levels = 0;
+    int total_friend_levels = 0;
 
     total_friends = 0;
     friend_align = 0;
 
-    for (m_idx = m_max - 1; m_idx >=1; m_idx--)
+    for (m_idx = m_max - 1; m_idx >= 1; m_idx--)
     {
         monster_type *m_ptr;
         monster_race *r_ptr;
@@ -1460,196 +1479,51 @@ int calculate_upkeep(void)
         if (is_pet(m_ptr))
         {
             total_friends++;
-            if (warlock_is_pact_monster(r_ptr))
-            {
-                total_friend_levels += r_ptr->level/2;
-                if (r_ptr->flags1 & RF1_UNIQUE)
-                    total_friend_levels += r_ptr->level/2;
-            }
-            else if (r_ptr->flags1 & RF1_UNIQUE)
-            {
-                if (p_ptr->pclass == CLASS_CAVALRY || p_ptr->prace == RACE_MON_RING)
-                {
-                    if (p_ptr->riding == m_idx)
-                        total_friend_levels += (r_ptr->level+5)*2;
-                    else if (!have_a_unique && (r_info[m_ptr->r_idx].flags7 & RF7_RIDING))
-                        total_friend_levels += (r_ptr->level+5)*7/2;
-                    else
-                        total_friend_levels += (r_ptr->level+5)*10;
-                    have_a_unique = TRUE;
-                }
-                else
-                    total_friend_levels += (r_ptr->level+5)*10;
-            }
-            else
-                total_friend_levels += r_ptr->level;
+            total_friend_levels += pet_upkeep_cost_x2(m_ptr, &have_a_unique) / 2;
 
             /* Determine pet alignment */
             if (r_ptr->flags3 & RF3_GOOD) friend_align += r_ptr->level;
             if (r_ptr->flags3 & RF3_EVIL) friend_align -= r_ptr->level;
         }
     }
+
     if (old_friend_align != friend_align) p_ptr->update |= (PU_BONUS);
+
+    if (pet_count) *pet_count = total_friends;
+    if (total_levels) *total_levels = total_friend_levels;
+    if (limit) *limit = pet_upkeep_limit();
+
     if (total_friends)
     {
-        int upkeep_factor;
-        int div = get_class()->pets;
-
-        /* Lower divs are better ... I think. */
-        if (prace_is_(RACE_DEMIGOD) && p_ptr->psubrace == DEMIGOD_APHRODITE)
-            div /= 2;
-
-        if (prace_is_(RACE_MON_QUYLTHULG))
-            div = 7;
-
-        if (p_ptr->dragon_realm == DRAGON_REALM_DOMINATION)
-            div = 9;
-
-        if (prace_is_(RACE_MON_VAMPIRE))
-            div = 10;
-
-        upkeep_factor = (total_friend_levels - (p_ptr->lev * 80 / div));
+        int upkeep_factor = total_friend_levels - pet_upkeep_limit();
 
         if (upkeep_factor < 0) upkeep_factor = 0;
         if (upkeep_factor > 100) upkeep_factor += ((upkeep_factor - 100) / 2); /* Punish excessive upkeep */
         if (upkeep_factor > 1500) upkeep_factor = 1500;
         p_ptr->upkeep_warning = (upkeep_factor > SAFE_UPKEEP_PCT) ? TRUE : FALSE;
         if (p_ptr->upkeep_warning != old_warning) p_ptr->redraw |= (PR_STATUS);
-        return upkeep_factor;
+        if (upkeep) *upkeep = upkeep_factor;
     }
     else
     {
         p_ptr->upkeep_warning = FALSE;
         p_ptr->upset_okay = FALSE;
         if (p_ptr->upkeep_warning != old_warning) p_ptr->redraw |= (PR_STATUS);
-        return 0;
+        if (upkeep) *upkeep = 0;
     }
+}
+
+int calculate_upkeep(void)
+{
+    int upkeep = 0;
+
+    pet_calc_summary(NULL, NULL, NULL, &upkeep);
+    return upkeep;
 }
 
 void do_cmd_pet_dismiss(void)
 {
-    monster_type    *m_ptr;
-    bool        all_pets = FALSE;
-    int pet_ctr, i;
-    int Dismissed = 0;
-
-    u16b *who;
-    u16b dummy_why;
-    int max_pet = 0;
-    int cu, cv;
-
-    cu = Term->scr->cu;
-    cv = Term->scr->cv;
-    Term->scr->cu = 0;
-    Term->scr->cv = 1;
-
-    /* Allocate the "who" array */
-    C_MAKE(who, max_m_idx, u16b);
-
-    /* Process the monsters (backwards) */
-    for (pet_ctr = m_max - 1; pet_ctr >= 1; pet_ctr--)
-    {
-        if (is_pet(&m_list[pet_ctr]))
-            who[max_pet++] = pet_ctr;
-    }
-
-    /* Select the sort method */
-    ang_sort_comp = ang_sort_comp_pet_dismiss;
-    ang_sort_swap = ang_sort_swap_hook;
-
-    ang_sort(who, &dummy_why, max_pet);
-
-    /* Process the monsters (backwards) */
-    for (i = 0; i < max_pet; i++)
-    {
-        bool delete_this;
-        char friend_name[MAX_NLEN];
-        char buf[512];
-        bool kakunin;
-
-        /* Access the monster */
-        pet_ctr = who[i];
-        m_ptr = &m_list[pet_ctr];
-
-        delete_this = FALSE;
-        kakunin = ((pet_ctr == p_ptr->riding) || (m_ptr->nickname));
-        monster_desc(friend_name, m_ptr, MD_ASSUME_VISIBLE);
-
-        if (!all_pets)
-        {
-            /* Hack -- health bar for this monster */
-            health_track(pet_ctr);
-
-            /* Hack -- handle stuff */
-            handle_stuff();
-
-            sprintf(buf, "Dismiss %s? [Yes/No/Unnamed (%d remain)]", friend_name, max_pet - i);
-            prt(buf, 0, 0);
-
-            if (m_ptr->ml)
-                move_cursor_relative(m_ptr->fy, m_ptr->fx);
-
-            while (TRUE)
-            {
-                char ch = inkey();
-
-                if (ch == 'Y' || ch == 'y')
-                {
-                    delete_this = TRUE;
-
-                    if (kakunin)
-                    {
-                        sprintf(buf, "Are you sure? (%s) ", friend_name);
-                        if (!get_check(buf))
-                            delete_this = FALSE;
-                    }
-                    break;
-                }
-
-                if (ch == 'U' || ch == 'u')
-                {
-                    all_pets = TRUE;
-                    break;
-                }
-
-                if (ch == ESCAPE || ch == 'N' || ch == 'n')
-                    break;
-
-                bell();
-            }
-        }
-
-        if ((all_pets && !kakunin) || (!all_pets && delete_this))
-        {
-            if (pet_ctr == p_ptr->riding)
-            {
-                msg_format("You have got off %s. ", friend_name);
-                p_ptr->riding = 0;
-                p_ptr->update |= (PU_BONUS | PU_MONSTERS);
-                p_ptr->redraw |= (PR_EXTRA | PR_HEALTH_BARS);
-            }
-
-            sprintf(buf, "Dismissed %s.", friend_name);
-
-            msg_add(buf);
-            p_ptr->window |= (PW_MESSAGE);
-            window_stuff();
-
-            delete_monster_idx(pet_ctr);
-            Dismissed++;
-        }
-    }
-
-    Term->scr->cu = cu;
-    Term->scr->cv = cv;
-    Term_fresh();
-
-    C_KILL(who, max_m_idx, u16b);
-
-    msg_format("You have dismissed %d pet%s.", Dismissed,
-           (Dismissed == 1 ? "" : "s"));
-    if (Dismissed == 0 && all_pets)
-        msg_print("'U'nnamed means all your pets except named pets and your mount.");
+    do_cmd_knowledge_pets_dismiss(FALSE);
 }
 
 bool player_can_ride_aux(cave_type *c_ptr, bool now_riding)
@@ -2001,64 +1875,7 @@ bool do_riding(bool force)
 
 static void do_name_pet(void)
 {
-    monster_type *m_ptr;
-    char out_val[20];
-    char m_name[80];
-    bool old_target_pet = target_pet;
-
-    target_pet = TRUE;
-    if (!target_set(TARGET_KILL))
-    {
-        target_pet = old_target_pet;
-        return;
-    }
-    target_pet = old_target_pet;
-
-    if (cave[target_row][target_col].m_idx)
-    {
-        m_ptr = &m_list[cave[target_row][target_col].m_idx];
-
-        if (!is_pet(m_ptr))
-        {
-            /* Message */
-            msg_format("This monster is not a pet.");
-            return;
-        }
-        if (r_info[m_ptr->r_idx].flags1 & RF1_UNIQUE)
-        {
-            msg_format("You cannot rename this monster!");
-            return;
-        }
-        monster_desc(m_name, m_ptr, 0);
-
-        /* Message */
-        msg_format("Name %s.", m_name);
-
-        msg_print(NULL);
-
-        /* Start with nothing */
-        strcpy(out_val, "");
-
-        /* Use old inscription */
-        if (m_ptr->nickname)
-        {
-            /* Start with the old inscription */
-            strcpy(out_val, quark_str(m_ptr->nickname));
-        }
-
-        /* Get a new inscription (possibly empty) */
-        if (get_string("Name: ", out_val, 16))
-        {
-            if (out_val[0])
-            {
-                m_ptr->nickname = quark_add(out_val);
-            }
-            else
-            {
-                m_ptr->nickname = 0;
-            }
-        }
-    }
+    do_cmd_knowledge_pets_rename();
 }
 
 /*
@@ -2081,6 +1898,7 @@ void do_cmd_pet(void)
 
     char buf[160];
     char target_buf[160];
+    char summary[160];
 
     int menu_line = use_menu ? 1 : 0;
 
@@ -2183,7 +2001,7 @@ void do_cmd_pet(void)
 
     if (p_ptr->riding)
     {
-        power_desc[num] = "get off a pet";
+        power_desc[num] = "dismount from a pet";
     }
     else
     {
@@ -2195,26 +2013,8 @@ void do_cmd_pet(void)
 
     powers[num++] = PET_NAME;
 
-    if (p_ptr->riding && p_ptr->prace != RACE_MON_RING)
-    {
-        /* TODO: We used to check weapons to see if 2-handed was an option ... */
-        if (p_ptr->pet_extra_flags & PF_RYOUTE)
-            power_desc[num] = "use one hand to control a riding pet";
-        else
-            power_desc[num] = "use both hands for a weapon";
-
-        powers[num++] = PET_RYOUTE;
-    }
-
-    if (p_ptr->pet_extra_flags & PF_NO_BREEDING)
-    {
-        power_desc[num] = "no breeding (now On)";
-    }
-    else
-    {
-        power_desc[num] = "no breeding (now Off)";
-    }
-    powers[num++] = PET_NO_BREEDING;
+    power_desc[num] = "list current pets";
+    powers[num++] = PET_LIST;
 
     if (!use_graphics)
     {
@@ -2238,6 +2038,27 @@ void do_cmd_pet(void)
         power_desc[num] = "highlight pets in lists (now Off)";
     }
     powers[num++] = PET_HILITE_LISTS;
+
+    if (p_ptr->pet_extra_flags & PF_NO_BREEDING)
+    {
+        power_desc[num] = "no breeding (now On)";
+    }
+    else
+    {
+        power_desc[num] = "no breeding (now Off)";
+    }
+    powers[num++] = PET_NO_BREEDING;
+
+    if (p_ptr->riding && p_ptr->prace != RACE_MON_RING)
+    {
+        /* TODO: We used to check weapons to see if 2-handed was an option ... */
+        if (p_ptr->pet_extra_flags & PF_RYOUTE)
+            power_desc[num] = "use one hand to control a riding pet";
+        else
+            power_desc[num] = "use both hands for a weapon";
+
+        powers[num++] = PET_RYOUTE;
+    }
 
 #ifdef ALLOW_REPEAT
     if (!(repeat_pull(&i) && (i >= 0) && (i < num)))
@@ -2271,6 +2092,12 @@ void do_cmd_pet(void)
     /* Get a command from the user */
     while (!flag)
     {
+        int pet_count, total_levels, limit, upkeep;
+
+        pet_calc_summary(&pet_count, &total_levels, &limit, &upkeep);
+        strnfmt(summary, sizeof(summary), "Pets: %d    Levels: %d/%d     Upkeep: %d%%", pet_count, total_levels, limit, upkeep);
+        prt(summary, 0, 0);
+
         if (choice == ESCAPE) choice = ' ';
         else if (!get_com(out_val, &choice, TRUE)) break;
 
@@ -2323,7 +2150,7 @@ void do_cmd_pet(void)
             /* Show the list */
             if (!redraw || use_menu)
             {
-                byte y = 1, x = 0;
+                byte y = 2, x = 0;
                 int ctr = 0;
 
                 /* Show list */
@@ -2332,6 +2159,8 @@ void do_cmd_pet(void)
                 /* Save the screen */
                 if (!use_menu) screen_save();
 
+                prt(summary, 0, x);
+                prt("", 1, x);
                 prt("", y++, x);
 
                 /* Print list */
@@ -2546,7 +2375,21 @@ void do_cmd_pet(void)
 
         case PET_NAME:
         {
+            for (pet_ctr = m_max - 1; pet_ctr >= 1; pet_ctr--)
+            {
+                if (is_pet(&m_list[pet_ctr])) break;
+            }
+            if (!pet_ctr)
+            {
+                msg_print("You have no pets!");
+                break;
+            }
             do_name_pet();
+            break;
+        }
+        case PET_LIST:
+        {
+            do_cmd_knowledge_pets();
             break;
         }
 

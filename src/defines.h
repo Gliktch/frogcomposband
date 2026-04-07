@@ -353,6 +353,7 @@
 #define PET_NO_BREEDING         17
 #define PET_HILITE              18
 #define PET_HILITE_LISTS        19
+#define PET_LIST                20
 
 /*
  * Follow distances

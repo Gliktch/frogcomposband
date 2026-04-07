@@ -1614,14 +1614,11 @@ static void process_world_aux_hp_and_sp(void)
         }
         else
         {
-            while (upkeep_factor > 100)
+            if (upkeep_factor > 100)
             {
                 msg_print("Too many pets to control at once!");
                 msg_print(NULL);
-                do_cmd_pet_dismiss();
-                upkeep_factor = calculate_upkeep();
-                msg_format("Upkeep: %d%% mana.", upkeep_factor);
-                msg_print(NULL);
+                do_cmd_knowledge_pets_dismiss(TRUE);
             }
         }
     }

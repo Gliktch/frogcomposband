@@ -5074,69 +5074,572 @@ void plural_aux(char *Name)
     }
 }
 
-/*
- * Display current pets
- */
-static void do_cmd_knowledge_pets(void)
+typedef enum {
+    _PET_UI_MODE_NORMAL = 0,
+    _PET_UI_MODE_DISMISS,
+    _PET_UI_MODE_RENAME,
+    _PET_UI_MODE_FORCE_DISMISS
+} _pet_ui_mode_t;
+
+#define _PET_UI_NAME_COL 21
+#define _PET_UI_NAME_WID 31
+#define _PET_UI_COORD_COL 53
+
+static bool ang_sort_comp_pet_list(vptr u, vptr v, int a, int b)
 {
-    int             i;
-    FILE            *fff;
-    monster_type    *m_ptr;
-    monster_race    *r_ptr;
-    char            pet_name[80];
-    int             t_friends = 0;
-    int             show_upkeep = 0;
-    char            file_name[1024];
+    u16b *who = (u16b *)u;
+    int w1 = who[a];
+    int w2 = who[b];
+    monster_type *m_ptr1 = &m_list[w1];
+    monster_type *m_ptr2 = &m_list[w2];
+    monster_race *r_ptr1 = &r_info[m_ptr1->r_idx];
+    monster_race *r_ptr2 = &r_info[m_ptr2->r_idx];
+    int cmp;
 
+    (void)v;
 
-    /* Open a new file */
-    fff = my_fopen_temp(file_name, 1024);
-    if (!fff) {
-        msg_format("Failed to create temporary file %s.", file_name);
-        msg_print(NULL);
+    if (w1 == p_ptr->riding) return TRUE;
+    if (w2 == p_ptr->riding) return FALSE;
+
+    if (r_ptr1->level > r_ptr2->level) return TRUE;
+    if (r_ptr2->level > r_ptr1->level) return FALSE;
+
+    cmp = strcmp(r_name + r_ptr1->name, r_name + r_ptr2->name);
+    if (cmp < 0) return TRUE;
+    if (cmp > 0) return FALSE;
+
+    if (m_ptr1->nickname && !m_ptr2->nickname) return TRUE;
+    if (m_ptr2->nickname && !m_ptr1->nickname) return FALSE;
+    if (m_ptr1->nickname && m_ptr2->nickname)
+    {
+        cmp = strcmp(quark_str(m_ptr1->nickname), quark_str(m_ptr2->nickname));
+        if (cmp < 0) return TRUE;
+        if (cmp > 0) return FALSE;
+    }
+
+    if (m_ptr1->hp > m_ptr2->hp) return TRUE;
+    if (m_ptr2->hp > m_ptr1->hp) return FALSE;
+
+    return w1 <= w2;
+}
+
+static int _pet_collect_sorted(u16b *who)
+{
+    int m_idx;
+    int ct = 0;
+    u16b dummy_why = 0;
+
+    for (m_idx = m_max - 1; m_idx >= 1; m_idx--)
+    {
+        if (is_pet(&m_list[m_idx]))
+            who[ct++] = m_idx;
+    }
+
+    ang_sort_comp = ang_sort_comp_pet_list;
+    ang_sort_swap = ang_sort_swap_hook;
+    ang_sort(who, &dummy_why, ct);
+
+    return ct;
+}
+
+static bool _pet_coords_known(monster_type *m_ptr)
+{
+    return m_ptr->ml && !(m_ptr->mflag2 & MFLAG2_FUZZY) && !p_ptr->image;
+}
+
+static bool _pet_is_unnamed(monster_type *m_ptr)
+{
+    monster_race *r_ptr = &r_info[m_ptr->r_idx];
+    return m_ptr->id != p_ptr->riding
+        && !m_ptr->nickname
+        && !(r_ptr->flags1 & RF1_UNIQUE);
+}
+
+static int _pet_ui_page_size(_pet_ui_mode_t mode)
+{
+    int wid, hgt;
+    int reserved = 4; /* summary, blank, header, footer */
+
+    Term_get_size(&wid, &hgt);
+    if (mode == _PET_UI_MODE_NORMAL)
+        reserved += 1; /* page info */
+    if (mode == _PET_UI_MODE_FORCE_DISMISS)
+        reserved += 2; /* warning + blank */
+
+    return MAX(1, MIN(20, hgt - reserved));
+}
+
+static void _pet_health_parts(monster_type *m_ptr, byte *left_attr, byte *bar_attr, byte *right_attr, char fill[10])
+{
+    byte base_attr = TERM_WHITE;
+
+    if (m_ptr->id == target_who)
+        base_attr = TERM_L_RED;
+    else if (m_ptr->id == p_ptr->riding)
+        base_attr = TERM_L_BLUE;
+
+    *left_attr = *right_attr = base_attr;
+    strcpy(fill, "---------");
+
+    if (!_pet_coords_known(m_ptr) || m_ptr->hp < 0)
+    {
+        int pct = 100 * m_ptr->hp / MAX(1, m_ptr->maxhp);
+
+        if (m_ptr->hp >= m_ptr->maxhp)
+        {
+            *bar_attr = TERM_L_GREEN;
+            memset(fill, '*', 9);
+        }
+        else if (pct >= 60)
+        {
+            *bar_attr = TERM_YELLOW;
+            memcpy(fill, "??????", 6);
+        }
+        else if (pct >= 25)
+        {
+            *bar_attr = TERM_ORANGE;
+            memcpy(fill, "????", 4);
+        }
+        else if (pct >= 10)
+        {
+            *bar_attr = TERM_L_RED;
+            memcpy(fill, "??", 2);
+        }
+        else
+        {
+            *bar_attr = TERM_RED;
+            fill[0] = '?';
+        }
         return;
     }
 
-    /* Process the monsters (backwards) */
-    for (i = m_max - 1; i >= 1; i--)
     {
-        /* Access the monster */
-        m_ptr = &m_list[i];
-        r_ptr = &r_info[m_ptr->r_idx];
+        int pct = 100 * m_ptr->hp / MAX(1, m_ptr->maxhp);
+        int len = MIN(9, 1 + m_ptr->hp * 9 / MAX(1, m_ptr->max_maxhp));
 
-        /* Ignore "dead" monsters */
-        if (!m_ptr->r_idx) continue;
+        memset(fill, m_ptr->ego_whip_ct ? 'w' : '*', len);
 
-        /* Calculate "upkeep" for pets */
-        if (is_pet(m_ptr))
+        if (pct >= 100) *bar_attr = TERM_L_GREEN;
+        else if (pct >= 60) *bar_attr = TERM_YELLOW;
+        else if (pct >= 25) *bar_attr = TERM_ORANGE;
+        else if (pct >= 10) *bar_attr = TERM_L_RED;
+        else *bar_attr = TERM_RED;
+
+        if (MON_INVULNER(m_ptr)) *bar_attr = TERM_WHITE;
+        else if (MON_PARALYZED(m_ptr)) *bar_attr = TERM_BLUE;
+        else if (MON_CSLEEP(m_ptr)) *bar_attr = TERM_BLUE;
+        else if (MON_CONFUSED(m_ptr)) *bar_attr = TERM_UMBER;
+        else if (MON_STUNNED(m_ptr)) *bar_attr = TERM_L_BLUE;
+        else if (MON_MONFEAR(m_ptr)) *bar_attr = TERM_VIOLET;
+        else if (monster_slow(m_ptr)) *bar_attr = TERM_L_DARK;
+
+        if (m_ptr->mpower > 1333)
+            *left_attr = *right_attr = TERM_BLUE;
+        else if (MON_FAST(m_ptr))
+            *left_attr = *right_attr = TERM_VIOLET;
+    }
+}
+
+static void _pet_name_parts(monster_type *m_ptr, char *part1, byte *attr1, char *part2, byte *attr2)
+{
+    monster_race *r_ptr = &r_info[m_ptr->r_idx];
+
+    part1[0] = '\0';
+    part2[0] = '\0';
+    *attr1 = TERM_WHITE;
+    *attr2 = TERM_WHITE;
+
+    if (m_ptr->nickname)
+    {
+        strcpy(part1, quark_str(m_ptr->nickname));
+        *attr1 = TERM_YELLOW;
+
+        if (!(r_ptr->flags1 & RF1_UNIQUE))
+            sprintf(part2, " (%s)", r_name + r_ptr->name);
+    }
+    else if (r_ptr->flags1 & RF1_UNIQUE)
+    {
+        strcpy(part1, r_name + r_ptr->name);
+        *attr1 = TERM_VIOLET;
+    }
+    else
+    {
+        strcpy(part1, r_name + r_ptr->name);
+    }
+}
+
+static void _pet_coords(char *buf, monster_type *m_ptr)
+{
+    if (!_pet_coords_known(m_ptr))
+        strcpy(buf, "");
+    else
+        sprintf(buf, "%c %2d %c%3d",
+            m_ptr->fy > py ? 'S' : 'N', abs(m_ptr->fy - py),
+            m_ptr->fx > px ? 'E' : 'W', abs(m_ptr->fx - px));
+}
+
+static void _pet_clear_row(int row)
+{
+    Term_erase(0, row, 255);
+}
+
+static void _pet_prt_name(int row, monster_type *m_ptr)
+{
+    char part1[80], part2[120];
+    byte attr1, attr2;
+    int remain = _PET_UI_NAME_WID;
+    int len;
+
+    _pet_name_parts(m_ptr, part1, &attr1, part2, &attr2);
+
+    if (remain <= 0) return;
+
+    len = MIN((int)strlen(part1), remain);
+    if (len > 0)
+    {
+        c_put_str(attr1, format("%.*s", len, part1), row, _PET_UI_NAME_COL);
+        remain -= len;
+    }
+
+    if (remain > 0)
+    {
+        len = MIN((int)strlen(part2), remain);
+        if (len > 0)
         {
-            t_friends++;
-            monster_desc(pet_name, m_ptr, MD_ASSUME_VISIBLE | MD_INDEF_VISIBLE);
-            fprintf(fff, "%s (", pet_name);
-            if (r_ptr->r_tkills)
-                fprintf(fff, "L%d, ", r_ptr->level);
-            fprintf(fff, "%s)\n", mon_health_desc(m_ptr));
+            c_put_str(attr2, format("%.*s", len, part2), row, _PET_UI_NAME_COL + _PET_UI_NAME_WID - remain);
+            remain -= len;
         }
     }
 
-    show_upkeep = calculate_upkeep();
+    if (remain > 0)
+        Term_erase(_PET_UI_NAME_COL + _PET_UI_NAME_WID - remain, row, remain);
+}
 
-    fprintf(fff, "----------------------------------------------\n");
-    fprintf(fff, "   Total: %d pet%s.\n",
-        t_friends, (t_friends == 1 ? "" : "s"));
-    fprintf(fff, "   Upkeep: %d%% mana.\n", show_upkeep);
+static void _pet_draw_row(int row, monster_type *m_ptr, int cost, char letter, bool selecting)
+{
+    byte left_attr, bar_attr, right_attr;
+    char fill[10];
+    char coords[16];
+    int x = 0;
 
+    _pet_clear_row(row);
 
+    if (selecting)
+    {
+        c_put_str(TERM_WHITE, format("%c)", letter), row, 0);
+        x = 3;
+    }
 
-    /* Close the file */
-    my_fclose(fff);
+    c_put_str(TERM_WHITE, format("%3d", r_info[m_ptr->r_idx].level), row, x + 0);
+    c_put_str(TERM_WHITE, format("%4d", cost), row, x + 4);
 
-    /* Display the file contents */
-    show_file(TRUE, file_name, "Current Pets", 0, 0);
+    _pet_health_parts(m_ptr, &left_attr, &bar_attr, &right_attr, fill);
+    c_put_str(left_attr, "[", row, x + 9);
+    c_put_str(bar_attr, fill, row, x + 10);
+    c_put_str(right_attr, "]", row, x + 19);
 
+    _pet_prt_name(row, m_ptr);
 
-    /* Remove the file */
-    fd_kill(file_name);
+    _pet_coords(coords, m_ptr);
+    if (coords[0])
+        c_put_str(TERM_WHITE, coords, row, _PET_UI_COORD_COL);
+    else
+        Term_erase(_PET_UI_COORD_COL, row, 9);
+}
+
+static bool _pet_confirm_bulk_dismiss(void)
+{
+    return get_check("Dismiss all unnamed pets? ");
+}
+
+static bool _pet_confirm_dismiss(monster_type *m_ptr)
+{
+    char friend_name[MAX_NLEN + 80];
+
+    monster_desc(friend_name, m_ptr, MD_ASSUME_VISIBLE);
+    return get_check(format("Dismiss %s? ", friend_name));
+}
+
+static int _pet_bulk_dismiss(void)
+{
+    int i;
+    int dismissed = 0;
+    u16b *who;
+    int ct;
+
+    C_MAKE(who, max_m_idx, u16b);
+    ct = _pet_collect_sorted(who);
+
+    for (i = 0; i < ct; i++)
+    {
+        monster_type *m_ptr = &m_list[who[i]];
+        char friend_name[MAX_NLEN + 80];
+
+        if (!_pet_is_unnamed(m_ptr)) continue;
+
+        monster_desc(friend_name, m_ptr, MD_ASSUME_VISIBLE);
+        msg_add(format("Dismissed %s.", friend_name));
+        p_ptr->window |= PW_MESSAGE;
+        delete_monster_idx(who[i]);
+        dismissed++;
+    }
+
+    C_KILL(who, max_m_idx, u16b);
+
+    if (dismissed)
+        window_stuff();
+
+    return dismissed;
+}
+
+static bool _pet_dismiss_one(monster_type *m_ptr)
+{
+    char friend_name[MAX_NLEN + 80];
+
+    monster_desc(friend_name, m_ptr, MD_ASSUME_VISIBLE);
+
+    if (m_ptr->id == p_ptr->riding)
+    {
+        msg_format("You dismount from %s.", friend_name);
+        p_ptr->riding = 0;
+        p_ptr->update |= (PU_BONUS | PU_MONSTERS);
+        p_ptr->redraw |= (PR_EXTRA | PR_HEALTH_BARS);
+    }
+
+    msg_add(format("Dismissed %s.", friend_name));
+    p_ptr->window |= PW_MESSAGE;
+    window_stuff();
+    delete_monster_idx(m_ptr->id);
+    return TRUE;
+}
+
+static void _pet_rename(monster_type *m_ptr)
+{
+    char out_val[20];
+    char m_name[MAX_NLEN];
+
+    if (r_info[m_ptr->r_idx].flags1 & RF1_UNIQUE)
+    {
+        msg_format("You cannot rename this monster!");
+        return;
+    }
+
+    monster_desc(m_name, m_ptr, 0);
+    msg_format("Name %s.", m_name);
+    msg_print(NULL);
+
+    if (m_ptr->nickname)
+        strcpy(out_val, quark_str(m_ptr->nickname));
+    else
+        strcpy(out_val, "");
+
+    if (get_string("Name: ", out_val, 16))
+    {
+        if (out_val[0])
+            m_ptr->nickname = quark_add(out_val);
+        else
+            m_ptr->nickname = 0;
+    }
+}
+
+static void _do_cmd_knowledge_pets(_pet_ui_mode_t entry_mode)
+{
+    _pet_ui_mode_t mode = entry_mode == _PET_UI_MODE_FORCE_DISMISS ? _PET_UI_MODE_DISMISS : entry_mode;
+    bool forced = entry_mode == _PET_UI_MODE_FORCE_DISMISS;
+    int top = 0;
+    u16b *who;
+    int *costs;
+
+    C_MAKE(who, max_m_idx, u16b);
+    C_MAKE(costs, max_m_idx, int);
+    screen_save();
+
+    for (;;)
+    {
+        int wid, hgt;
+        int pet_count, total_levels, limit, upkeep;
+        int ct, page_size, page_count, page, start_row, header_row, list_row, footer_row;
+        int i;
+        char summary[160];
+        char header[80];
+        char footer[160];
+
+        Term_get_size(&wid, &hgt);
+        pet_calc_summary(&pet_count, &total_levels, &limit, &upkeep);
+        ct = _pet_collect_sorted(who);
+        C_WIPE(costs, max_m_idx, int);
+        {
+            bool have_a_unique = FALSE;
+            int m_idx;
+            for (m_idx = m_max - 1; m_idx >= 1; m_idx--)
+            {
+                if (is_pet(&m_list[m_idx]))
+                {
+                    int cost2 = pet_upkeep_cost_x2(&m_list[m_idx], &have_a_unique);
+                    costs[m_idx] = (cost2 + 1) / 2;
+                }
+            }
+        }
+        page_size = _pet_ui_page_size(forced ? _PET_UI_MODE_FORCE_DISMISS : mode);
+        page_count = MAX(1, (ct + page_size - 1) / page_size);
+        if (top >= ct) top = MAX(0, (page_count - 1) * page_size);
+        if (top < 0) top = 0;
+        page = top / page_size + 1;
+
+        start_row = 2;
+        if (forced)
+            start_row += 2;
+        header_row = start_row;
+        list_row = header_row + 1;
+        footer_row = hgt - 1;
+
+        strnfmt(summary, sizeof(summary), "Pets: %d    Levels: %d/%d     Upkeep: %d%%", pet_count, total_levels, limit, upkeep);
+        if (mode == _PET_UI_MODE_NORMAL)
+            strcpy(footer, "Commands: n) rename pet  d) dismiss pet  ESC) exit");
+        else if (mode == _PET_UI_MODE_DISMISS)
+            strcpy(footer, "Dismiss which pet? ('u' for all unnamed, Esc to cancel)");
+        else
+            strcpy(footer, "Rename which pet? (Esc to cancel)");
+
+        strcpy(header, (mode == _PET_UI_MODE_NORMAL)
+            ? "Lvl Cost  Health      Pet                             Coords"
+            : "  Lvl Cost  Health      Pet                             Coords");
+
+        Term_clear();
+        prt(summary, 0, 0);
+        if (forced)
+            c_prt(TERM_L_RED, "You can't support so many pets right now. Release some until your upkeep falls below 100%.", 2, 0);
+        prt(header, header_row, 0);
+
+        for (i = 0; i < page_size && top + i < ct; i++)
+        {
+            monster_type *m_ptr = &m_list[who[top + i]];
+            _pet_draw_row(list_row + i, m_ptr, costs[m_ptr->id], I2A(i), mode != _PET_UI_MODE_NORMAL);
+        }
+        for (; list_row + i < footer_row; i++)
+            _pet_clear_row(list_row + i);
+
+        if (mode == _PET_UI_MODE_NORMAL && page_count > 1)
+            prt(format("Page %d of %d", page, page_count), footer_row - 1, 0);
+        else if (footer_row > 0)
+            _pet_clear_row(footer_row - 1);
+
+        prt(footer, footer_row, 0);
+
+        {
+            int cmd = inkey_special(TRUE);
+
+            if (rogue_like_commands)
+            {
+                if (cmd == 'j') cmd = SKEY_DOWN;
+                else if (cmd == 'k') cmd = SKEY_UP;
+            }
+
+            if (mode == _PET_UI_MODE_NORMAL)
+            {
+                switch (cmd)
+                {
+                case ESCAPE:
+                case 'q':
+                case 'Q':
+                    screen_load();
+                    C_KILL(who, max_m_idx, u16b);
+                    C_KILL(costs, max_m_idx, int);
+                    return;
+                case 'n':
+                case 'N':
+                    if (!ct) msg_print("You have no pets!");
+                    else mode = _PET_UI_MODE_RENAME;
+                    break;
+                case 'd':
+                case 'D':
+                    if (!ct) msg_print("You have no pets!");
+                    else mode = _PET_UI_MODE_DISMISS;
+                    break;
+                case ' ':
+                case '3':
+                case SKEY_PGDOWN:
+                    if (top + page_size < ct) top += page_size;
+                    break;
+                case '-':
+                case '9':
+                case SKEY_PGUP:
+                    if (top >= page_size) top -= page_size;
+                    break;
+                default:
+                    bell();
+                }
+            }
+            else if (mode == _PET_UI_MODE_DISMISS)
+            {
+                if (cmd == ESCAPE)
+                {
+                    if (forced && upkeep > 100)
+                    {
+                        msg_print("You must release more pets first.");
+                        continue;
+                    }
+                    mode = _PET_UI_MODE_NORMAL;
+                    continue;
+                }
+                if (cmd == 'u' || cmd == 'U')
+                {
+                    if (_pet_confirm_bulk_dismiss())
+                    {
+                        int dismissed = _pet_bulk_dismiss();
+                        if (dismissed)
+                            msg_format("You have dismissed %d pet%s.", dismissed, dismissed == 1 ? "" : "s");
+                        else
+                            msg_print("'u'nnamed means all your pets except named pets and your mount.");
+                    }
+                    continue;
+                }
+                if (islower(cmd))
+                {
+                    int idx = top + A2I(cmd);
+                    if (idx >= top && idx < MIN(top + page_size, ct))
+                    {
+                        monster_type *m_ptr = &m_list[who[idx]];
+                        if (_pet_confirm_dismiss(m_ptr))
+                            _pet_dismiss_one(m_ptr);
+                    }
+                    else bell();
+                }
+                else bell();
+            }
+            else
+            {
+                if (cmd == ESCAPE)
+                {
+                    mode = _PET_UI_MODE_NORMAL;
+                    continue;
+                }
+                if (islower(cmd))
+                {
+                    int idx = top + A2I(cmd);
+                    if (idx >= top && idx < MIN(top + page_size, ct))
+                        _pet_rename(&m_list[who[idx]]);
+                    else bell();
+                }
+                else bell();
+            }
+        }
+    }
+}
+
+void do_cmd_knowledge_pets(void)
+{
+    _do_cmd_knowledge_pets(_PET_UI_MODE_NORMAL);
+}
+
+void do_cmd_knowledge_pets_dismiss(bool forced)
+{
+    _do_cmd_knowledge_pets(forced ? _PET_UI_MODE_FORCE_DISMISS : _PET_UI_MODE_DISMISS);
+}
+
+void do_cmd_knowledge_pets_rename(void)
+{
+    _do_cmd_knowledge_pets(_PET_UI_MODE_RENAME);
 }
 
 
