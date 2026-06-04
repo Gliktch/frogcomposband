@@ -1,2 +1,1 @@
-# frogcomposband
-Legacy redirect to Frox in case there are old links....
+### Hiya!  You're probably looking for [FroxComposband](https://github.com/gliktch/froxcomposband).
